@@ -4,7 +4,7 @@ speaking. Live bug from filming → pinned here."""
 
 import pytest
 
-from waku.gateway.voice import _speakable
+from weasley_assistant.gateway.voice import _speakable
 
 STRIPPED = [
     ("All set! 🎉 Booked for Saturday. 🎾", "All set! Booked for Saturday."),

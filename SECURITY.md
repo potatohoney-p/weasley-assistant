@@ -1,12 +1,12 @@
 # Security
 
-waku runs on your own machine, with your own API keys, and reads your own
+Weasley Assistant runs on your own machine, with your own API keys, and reads your own
 calendar, notes and messages. That makes a few things worth stating plainly.
 
 ## Reporting a vulnerability
 
 Please **don't** open a public issue for a security problem. Use GitHub's
-profile.
+[private vulnerability reporting](https://github.com/potatohoney-p/weasley-assistant/security/advisories/new).
 
 Expect a first response within 48 hours. If it's a real issue we'll agree a
 disclosure timeline with you and credit you in the fix, unless you'd rather stay
@@ -26,9 +26,9 @@ anonymous.
 
 - **The agent can run tools that touch your stuff.** That's the product. Tools
   are listed in the dashboard and gated behind extras and flags.
-- **`WAKU_EXPERIMENTAL=1`** enables sub-agent delegation, which runs another
+- **`WEASLEY_ASSISTANT_EXPERIMENTAL=1`** enables sub-agent delegation, which runs another
   coding agent locally. It's off by default and documented as experimental.
-- **Your own API keys in your own `.env`.** waku never sends them anywhere but
+- **Your own API keys in your own `.env`.** Weasley Assistant never sends them anywhere but
   the provider you configured.
 
 ## Running it safely

@@ -7,9 +7,9 @@ with its inner llm/tool events surfacing at the outer observer tagged node=.
 from __future__ import annotations
 
 from evals.helpers import ScriptedClient, response, text_block, tool_block
-from waku.graph import END, START, Graph, run_graph
-from waku.graph.nodes import agent_node, llm_node, tool_node
-from waku.tools.registry import Tool, ToolRegistry
+from weasley_assistant.graph import END, START, Graph, run_graph
+from weasley_assistant.graph.nodes import agent_node, llm_node, tool_node
+from weasley_assistant.tools.registry import Tool, ToolRegistry
 
 
 def one_node_graph(node) -> Graph:

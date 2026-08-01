@@ -1,10 +1,10 @@
-﻿"""Reset .waku to a clean, curated state for a demo / recording.
+"""Reset .weasley/assistant to a clean, curated state for a demo / recording.
 
     python scripts/demo_seed.py                 # clean slate, KEEPS the spend ledger
     python scripts/demo_seed.py --reset-spend   # also wipe usage.jsonl (money/tokens)
 
 What it does (your old state is backed up first, never just deleted):
-  1. moves the current .waku aside to .waku.bak-<timestamp>
+  1. moves the current home aside to a timestamped sibling backup
   2. creates a fresh state.db + calendar.ics
   3. seeds a small, clean memory (a few facts + one episode) and ONE calendar
      event — Sergey's standing Saturday 5 PM swim
@@ -24,20 +24,18 @@ import argparse
 import shutil
 from datetime import datetime
 
-from waku.config import load_settings
-from waku.db import connect
-from waku.memory.episodic.store import SqliteEpisodeStore
-from waku.memory.semantic.store import SqliteFactStore
-from waku.tools.calendar import make_tool
+from weasley_assistant.config import load_settings
+from weasley_assistant.db import connect
+from weasley_assistant.memory.episodic.store import SqliteEpisodeStore
+from weasley_assistant.memory.semantic.store import SqliteFactStore
+from weasley_assistant.tools.calendar import make_tool
 
 # Curated seed — clean, no duplicates. Edit these to taste before recording.
 FACTS = [
     # The parentheses around each multi-line string are load-bearing, not style:
     # inside a collection, a MISSING COMMA silently glues two entries into one
     # instead of erroring. ruff's ISC004 flags exactly that shape.
-    ("user", ("The user runs the YouTube channel 'Sean's AI Stories' and films implementation "
-              "walkthroughs. His X account is @potatohoney-p. All of his Chinese social media "
-              "accounts are called 肖恩君Sean.")),
+    ("user", "The user prefers concise technical explanations and local-first tools."),
     ("raj", ("Raj is a close friend who plays really great tennis and always teaches me great "
              "British slangs!")),
     ("sergey", "Sergey is the close friend who loves swimming and often cooks delicious food!"),
@@ -89,7 +87,7 @@ def main(reset_spend: bool = False) -> None:
     print(create_event(**EVENT))
 
     # regenerate the human-readable MEMORY.md mirror for the fresh state
-    from waku.memory import Memory
+    from weasley_assistant.memory import Memory
 
     Memory(conn, settings, None).export_markdown()
 
@@ -100,13 +98,13 @@ def main(reset_spend: bool = False) -> None:
         print("  CLEARED: usage.jsonl (money/token spend) — you approved this.")
     else:
         print("  KEPT: SOUL.md and usage.jsonl (your real spend — pass --reset-spend to wipe).")
-    print("  Run `waku dashboard` and start filming.")
+    print("  Run `weasley-assistant dashboard` to inspect the clean state.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Reset .waku to a clean demo state.")
+    parser = argparse.ArgumentParser(description="Reset .weasley/assistant to a clean demo state.")
     parser.add_argument("--yes", "-y", action="store_true",
-                        help="required confirmation: yes, wipe .waku (it is backed up first)")
+                        help="required confirmation: yes, wipe .weasley/assistant (it is backed up first)")
     parser.add_argument("--reset-spend", action="store_true",
                         help="also wipe usage.jsonl (the money/token spend ledger)")
     args = parser.parse_args()
@@ -114,7 +112,7 @@ if __name__ == "__main__":
         # Safety gate: this destroys live memory/calendar/traces. Refuse unless the
         # human explicitly confirms with --yes. See CLAUDE.md ("Never wipe runtime
         # data without asking first"). It backs up, but restoring is a hassle.
-        print("REFUSING to run: demo_seed clears .waku (memory, calendar, chat, traces"
+        print("REFUSING to run: demo_seed clears .weasley/assistant (memory, calendar, chat, traces"
               + (", AND spend" if args.reset_spend else "") + ").")
         print("This is destructive. If you truly mean it, re-run with --yes:")
         print("    python scripts/demo_seed.py --yes"

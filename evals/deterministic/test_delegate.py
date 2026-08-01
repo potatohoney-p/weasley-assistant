@@ -1,9 +1,10 @@
 """DETERMINISTIC EVAL — delegate_task hands coding work to pi, honestly.
 
-Hermetic: pi is NEVER actually spawned. subprocess.run and shutil.which are
-monkeypatched, so these run everywhere (CI included) with no node, no network.
-What's pinned: pi runs headless on the loop's OWN model, the outbox paper trail,
-and the honest strings for every failure mode (not installed / timeout / bad cwd)."""
+Hermetic: the real pi is NEVER spawned. Most subprocess calls are monkeypatched;
+the two streaming tests launch a Python fake through the current interpreter, so
+they run everywhere (CI included) with no node or network. What's pinned: pi runs
+headless on the loop's OWN model, the outbox paper trail, and the honest strings
+for every failure mode (not installed / timeout / bad cwd)."""
 
 from __future__ import annotations
 
@@ -12,15 +13,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from evals.helpers import ScriptedClient, make_waku, response, text_block, tool_block
-from waku.config import Settings
-from waku.tools import experimental
+from evals.helpers import ScriptedClient, make_assistant, response, text_block, tool_block
+from weasley_assistant.config import Settings
+from weasley_assistant.tools import experimental
 
 
 @pytest.fixture(autouse=True)
 def _tmp_workspace(tmp_path, monkeypatch):
-    """Never let a delegate test write into the repo's ./waku_workspace."""
-    monkeypatch.setenv("WAKU_WORKSPACE", str(tmp_path / "ws"))
+    """Never let a delegate test write into the repository workspace."""
+    monkeypatch.setenv("WEASLEY_ASSISTANT_WORKSPACE", str(tmp_path / "ws"))
 
 
 @pytest.fixture(autouse=True)
@@ -44,8 +45,8 @@ def test_delegate_task_invokes_pi_print_mode(tmp_path, monkeypatch):
     lands in the dated workspace with a MANIFEST + pi transcript, and pi's answer
     comes back in the tool result."""
     record = {}
-    monkeypatch.setenv("WAKU_EXPERIMENTAL", "1")
-    monkeypatch.setenv("WAKU_WORKSPACE", str(tmp_path / "ws"))   # keep it out of the repo
+    monkeypatch.setenv("WEASLEY_ASSISTANT_EXPERIMENTAL", "1")
+    monkeypatch.setenv("WEASLEY_ASSISTANT_WORKSPACE", str(tmp_path / "ws"))   # keep it out of the repo
     monkeypatch.setattr(experimental.shutil, "which", lambda _: "/fake/bin/pi")
     monkeypatch.setattr(experimental.subprocess, "run", fake_run(record))
 
@@ -54,7 +55,7 @@ def test_delegate_task_invokes_pi_print_mode(tmp_path, monkeypatch):
         response([tool_block("delegate_task", {"task": "create hello.py"})], "tool_use"),
         response([text_block("pi handled it.")]),
     ]
-    app = make_waku(tmp_path / "home", client=ScriptedClient(script))
+    app = make_assistant(tmp_path / "home", client=ScriptedClient(script))
     result = app.respond("have pi create hello.py")
 
     assert [c["tool"] for c in result.tool_calls] == ["delegate_task"]
@@ -103,7 +104,7 @@ def test_delegate_timeout_is_honest(tmp_path, monkeypatch):
     monkeypatch.setattr(experimental.subprocess, "run", run)
     tool = experimental.make_delegate_tool(Settings(home=tmp_path))
     out = tool.fn(task="huge refactor", timeout_seconds=7)
-    assert "7s" in out and "WAKU_DELEGATE_TIMEOUT" in out
+    assert "7s" in out and "WEASLEY_ASSISTANT_DELEGATE_TIMEOUT" in out
 
 
 def test_delegate_rejects_missing_cwd_and_empty_task(tmp_path, monkeypatch):
@@ -125,8 +126,7 @@ def test_delegate_failure_surfaces_stderr(tmp_path, monkeypatch):
     assert "pi hit an error" in out and "No API key found" in out
 
 
-FAKE_PI = '''#!/usr/bin/env python3
-"""A pi stand-in that speaks the --mode json event protocol (no node, no net)."""
+FAKE_PI = '''"""A pi stand-in that speaks the --mode json event protocol (no node, no net)."""
 import json, sys
 if "--help" in sys.argv:
     print("Options:\\n  --mode <mode>   Output mode: text, json, or rpc")
@@ -149,16 +149,21 @@ for e in events:
 '''
 
 
+def _write_fake_pi(tmp_path, source: str):
+    """Write a fake pi that the runtime launches with the current Python."""
+    fake = tmp_path / "bin" / "pi.py"
+    fake.parent.mkdir()
+    fake.write_text(source, encoding="utf-8")
+    return fake
+
+
 def test_delegate_streams_pi_events_and_ledgers_cost(tmp_path, monkeypatch):
     """The v2 contract, end to end through the REAL Popen path: pi's json events
     are relayed through _notify as kind="subagent", the reply is reconstructed
     from the final assistant message, the raw event stream is preserved, and —
     the arena-honesty fix — pi's tokens land in usage.jsonl as kind="subagent"
     so a delegated coding run is no longer free."""
-    fake = tmp_path / "bin" / "pi"
-    fake.parent.mkdir()
-    fake.write_text(FAKE_PI, encoding="utf-8")
-    fake.chmod(0o755)
+    fake = _write_fake_pi(tmp_path, FAKE_PI)
     monkeypatch.setattr(experimental.shutil, "which", lambda _: str(fake))
 
     home = tmp_path / "home"
@@ -187,28 +192,28 @@ def test_delegate_streams_pi_events_and_ledgers_cost(tmp_path, monkeypatch):
 def test_delegate_kills_a_silent_pi_at_the_deadline(tmp_path, monkeypatch):
     """A pi that starts streaming then hangs forever must not hang the loop:
     the queue-based deadline kills it and the model hears an honest timeout."""
-    fake = tmp_path / "bin" / "pi"
-    fake.parent.mkdir()
-    fake.write_text('#!/usr/bin/env python3\nimport sys, time\n'
-                    'if "--help" in sys.argv:\n'
-                    '    print("--mode json"); sys.exit(0)\n'
-                    'print(\'{"type": "turn_start"}\', flush=True)\n'
-                    'time.sleep(60)\n', encoding="utf-8")
-    fake.chmod(0o755)
+    fake = _write_fake_pi(
+        tmp_path,
+        'import sys, time\n'
+        'if "--help" in sys.argv:\n'
+        '    print("--mode json"); sys.exit(0)\n'
+        'print(\'{"type": "turn_start"}\', flush=True)\n'
+        'time.sleep(60)\n',
+    )
     monkeypatch.setattr(experimental.shutil, "which", lambda _: str(fake))
 
     tool = experimental.make_delegate_tool(Settings(home=tmp_path / "home"))
     out = tool.fn(task="anything", timeout_seconds=2)
-    assert "2s" in out and "WAKU_DELEGATE_TIMEOUT" in out
+    assert "2s" in out and "WEASLEY_ASSISTANT_DELEGATE_TIMEOUT" in out
 
 
 def test_experimental_flag_gates_registration(tmp_path, monkeypatch):
     """The demo depends on this: flag off → no delegate_task; flag on → present."""
-    monkeypatch.delenv("WAKU_EXPERIMENTAL", raising=False)
-    app_off = make_waku(tmp_path / "off", client=ScriptedClient([]))
+    monkeypatch.delenv("WEASLEY_ASSISTANT_EXPERIMENTAL", raising=False)
+    app_off = make_assistant(tmp_path / "off", client=ScriptedClient([]))
     assert "delegate_task" not in app_off.tools._tools
 
-    monkeypatch.setenv("WAKU_EXPERIMENTAL", "1")
-    app_on = make_waku(tmp_path / "on", client=ScriptedClient([]))
+    monkeypatch.setenv("WEASLEY_ASSISTANT_EXPERIMENTAL", "1")
+    app_on = make_assistant(tmp_path / "on", client=ScriptedClient([]))
     assert "delegate_task" in app_on.tools._tools
     assert "run_command" in app_on.tools._tools   # skeletons still registered

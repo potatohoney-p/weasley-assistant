@@ -24,10 +24,10 @@ from types import SimpleNamespace
 import pytest
 
 from evals.helpers import ScriptedClient, response, text_block
-from waku.db import connect
-from waku.memory.consolidation import SUMMARIZER_PROMPT, consolidate_if_due
-from waku.memory.episodic.store import SqliteEpisodeStore
-from waku.memory.semantic.store import SqliteFactStore
+from weasley_assistant.db import connect
+from weasley_assistant.memory.consolidation import SUMMARIZER_PROMPT, consolidate_if_due
+from weasley_assistant.memory.episodic.store import SqliteEpisodeStore
+from weasley_assistant.memory.semantic.store import SqliteFactStore
 
 DISTILLED = json.dumps({
     "facts": [{"subject": "Alex", "content": "Alex prefers morning meetings."},

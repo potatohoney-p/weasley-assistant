@@ -12,8 +12,8 @@ import time
 
 import pytest
 
-from waku.graph import END, START, Graph, GraphStateCollision, Node, run_graph
-from waku.graph.nodes import key_router
+from weasley_assistant.graph import END, START, Graph, GraphStateCollision, Node, run_graph
+from weasley_assistant.graph.nodes import key_router
 
 
 def collect_events():

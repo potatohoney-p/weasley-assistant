@@ -4,7 +4,7 @@
 
 Be decent. Assume the other person is trying to help. Critique code, not people.
 
-waku is a teaching repo — a lot of the people opening their first-ever pull
+Weasley Assistant is a teaching repo — a lot of the people opening their first-ever pull
 request will do it here. That's the point, and it sets the bar for how we
 answer them.
 
@@ -14,7 +14,7 @@ answer them.
   SQLite connection is bound to the thread that opened it" teaches something.
 - **A rejected PR is not a rejected person.** If we decline a change, we say
   what would have made it land — and forking is always fair game, that's what
-  MIT is for.
+  open source is for.
 - **No harassment, personal attacks, or demeaning comments** about anyone's
   experience level, background, identity, or English. Plenty of contributors
   here aren't writing in their first language.
@@ -29,8 +29,8 @@ and anywhere someone is representing the project.
 
 ## Enforcement
 
-Report anything that crosses the line by private message to
-profile. Reports stay private.
+Report anything that crosses the line by direct message to a project maintainer in the
+[project Discord](https://discord.gg/7Ntxzm3eJ). Reports stay private.
 
 Responses are proportionate: usually a quiet word, sometimes an edited or
 removed comment, and — for repeated or serious behavior — a block from the
