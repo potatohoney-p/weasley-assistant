@@ -1,4 +1,4 @@
-﻿# pi — the whole walkthrough  /  完整讲解
+# pi — the whole walkthrough  /  完整讲解
 
 **The one file to film from.** Follows the chart left→right, top→bottom. For every
 box: what it is, **where it actually lives on disk**, and the line to say.
@@ -9,7 +9,6 @@ demos verified live 2026-07-25. Every `[tested]` ran on this machine.
 The one question the video answers: **who owns the context — the vendor, or you?**
 pi's answer: *you do.*
 
-Chart: `~/Developer/Excalidraw/26.07.25 pi agent.excalidraw`
 
 ---
 
@@ -45,7 +44,7 @@ package 全世界。作用域就是这一课。
 |---|---|
 | `pi` | **TUI** — interactive app in your terminal |
 | `pi -p "task"` | **CLI** — answers once, exits. How scripts embed it |
-| `pi --mode json` | **event stream** on stdout, one JSON per line ← *waku plugs in here* |
+| `pi --mode json` | **event stream** on stdout, one JSON per line ← *weasley-assistant plugs in here* |
 | `pi --mode rpc` | long-lived pipe for other programs |
 
 All four consume the **same event stream** — the loop never knows who's watching.
@@ -55,8 +54,8 @@ All four consume the **same event stream** — the loop never knows who's watchi
 
 Two-command demo you can run on camera:
 ```bash
-claude -p "Reply with exactly: waku waku"   # answers, dies
-claude    "Reply with exactly: waku waku"   # banner, state, waits for you
+claude -p "Reply with exactly: hey Weasley"   # answers, dies
+claude    "Reply with exactly: hey Weasley"   # banner, state, waits for you
 ```
 
 ### CONTEXT — the whole state
@@ -83,7 +82,7 @@ wc -l ~/Developer/pi/packages/agent/src/agent-loop.ts     # → 792
 
 The three chart symbols, each a real place in the code:
 
-**◇ `tools?`** — [`agent-loop.ts:203`](../../pi/packages/agent/src/agent-loop.ts)
+**◇ `tools?`** — [`agent-loop.ts:203`](https://github.com/earendil-works/pi/blob/24e5cc0/packages/agent/src/agent-loop.ts#L203)
 ```typescript
 const toolCalls = message.content.filter((c) => c.type === "toolCall");
 if (toolCalls.length > 0) { … }
@@ -103,7 +102,7 @@ touches your disk; it can only *ask* for one of these. Run in **parallel** by
 default (`agent-loop.ts:425`), sequentially when a tool demands it.
 
 **◇ `allowed?`** — the extension gate.
-[`extensions/types.ts:1065`](../../pi/packages/coding-agent/src/core/extensions/types.ts):
+[`extensions/types.ts:1065`](https://github.com/earendil-works/pi/blob/24e5cc0/packages/coding-agent/src/core/extensions/types.ts#L1065):
 ```typescript
 export interface ToolCallEventResult {
   block?: boolean;
@@ -193,7 +192,7 @@ An npm or git bundle of skills + extensions + prompts + themes, declared under a
 | Refused | Use instead |
 |---|---|
 | MCP | any CLI + its README |
-| sub-agents | spawn more pi's (tmux — or waku's `delegate_task`) |
+| sub-agents | spawn more pi's (tmux — or weasley-assistant's `delegate_task`) |
 | plan mode / todos | `PLAN.md`, `TODO.md` — files you can open |
 | permissions | run it in a container |
 | **memory · evals** | **the orchestrator's job** — pi's "memory" is just the raw session |
@@ -203,15 +202,15 @@ An npm or git bundle of skills + extensions + prompts + themes, declared under a
 
 ---
 
-## 4 · waku × pi — the collab thesis
+## 4 · weasley-assistant × pi — the collab thesis
 
 ```
-waku loop → delegate_task → subprocess → pi -p --mode json
+weasley-assistant loop → delegate_task → subprocess → pi -p --mode json
      pi's events → the arena card (live mini-terminal)
-     pi's tokens → waku's usage ledger (coding runs aren't free)
+     pi's tokens → weasley-assistant's usage ledger (coding runs aren't free)
 ```
 
-Wiring: [`waku/tools/experimental.py`](../waku/tools/experimental.py) — every
+Wiring: [`weasley_assistant/tools/experimental.py`](../weasley_assistant/tools/experimental.py) — every
 delegated pi run inherits this repo's own extensions and skills:
 
 ```python
@@ -249,7 +248,7 @@ set -a; source .env; set +a
 | 1 | Prof. Oak's Pokedex | **SKILL** | `.agents/skills/pokedex/` |
 | 2 | Moves + gym rules | **EXTENSION** | `.pi/extensions/pokemon-battle.ts` |
 | 3 | Earning the Badge | **PACKAGE** | `pi-pokedex/` |
-| 4 | The League | **waku × pi** | `delegate_task` |
+| 4 | The League | **weasley-assistant × pi** | `delegate_task` |
 
 ### Stage 0 — bash is already a tool
 ```bash
@@ -275,10 +274,10 @@ pi -e .pi/extensions/pokemon-battle.ts --provider anthropic --model claude-haiku
    -a --no-session -p "Call type_matchup with attacker=fire, then say what fire beats."
 #  → Fire is super-effective against grass, ice, bug, and steel.
 
-# 2b — guard a verb (throwaway dir with a dummy .waku)
-pi -e .pi/extensions/pokemon-battle.ts … -p "Run: rm -rf .waku"
-#  → "…blocked by a safety guard. The .waku directory is protected…"
-#  → .waku SURVIVED. The refusal came back as a tool result and the model
+# 2b — guard a verb (throwaway dir with a dummy .weasley/assistant)
+pi -e .pi/extensions/pokemon-battle.ts … -p "Run: rm -rf .weasley/assistant"
+#  → "…blocked by a safety guard. The .weasley/assistant directory is protected…"
+#  → .weasley/assistant SURVIVED. The refusal came back as a tool result and the model
 #    adapted — offered to back up / narrow the path — instead of crashing.
 ```
 **That is the `allowed?` diamond, live.**
@@ -297,10 +296,10 @@ Skill + extension **compose**. The collision is itself the lesson: skills warn a
 keep the first; extension tools **hard-error** — two copies of a verb is ambiguous,
 so pi refuses rather than guess.
 
-### Stage 4 — waku × pi
+### Stage 4 — weasley-assistant × pi
 ```bash
-WAKU_EXPERIMENTAL=1 make run        # + make dashboard (:7777)
-# ask waku: "delegate to pi: what beats Charizard? use the pokedex + type_matchup"
+WEASLEY_ASSISTANT_EXPERIMENTAL=1 make run        # + make dashboard (:7777)
+# ask weasley-assistant: "delegate to pi: what beats Charizard? use the pokedex + type_matchup"
 ```
 Watch the arena card stream the sub-agent's tools live.
 
@@ -312,7 +311,7 @@ Watch the arena card stream the sub-agent's tools live.
 
 - **pi runs the model raw, and it can wander.** On one run, haiku ignored "what
   does fire beat?" and ran `git add` instead, reporting "Staged, ready to commit."
-  Why: pi loads `AGENTS.md`/`CLAUDE.md` from the repo, and waku's says *"commit
+  Why: pi loads `AGENTS.md`/`CLAUDE.md` from the repo, and weasley-assistant's says *"commit
   every milestone."* Seeing a dirty repo, the model followed the ambient rule over
   the trivial prompt. 3 of 4 runs were correct. **Clean repo + explicit prompt.**
 - **The knowledge-cutoff moment.** A Gemini session read `gpt-5.6` in pi's *own
@@ -346,5 +345,5 @@ ls    ~/.pi/agent/sessions/                                      # your own tree
 building a minimal coding agent"](https://mariozechner.at/posts/2025-11-30-pi-coding-agent/)
 · [earendil-works/pi](https://github.com/earendil-works/pi) · live tests on this
 machine, pi 0.82.0, 2026-07-24/25 · chart prompt:
-[whiteboards/pi-chart-prompt.md](whiteboards/pi-chart-prompt.md) · @potatohoney-p*
+[whiteboards/pi-chart-prompt.md](whiteboards/pi-chart-prompt.md)*
 

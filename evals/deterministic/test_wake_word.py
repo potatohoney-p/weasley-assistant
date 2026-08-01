@@ -3,29 +3,24 @@ Whisper mangles phrases in predictable ways; these cases pin the fuzziness."""
 
 import pytest
 
-from waku.gateway.voice import matches_wake
+from weasley_assistant.gateway.voice import matches_wake
 
 SHOULD_WAKE = [
-    ("waku waku", "waku waku"),
-    ("Waku, waku!", "waku waku"),            # punctuation
-    ("wakuwaku", "waku waku"),               # whisper drops the space
-    ("so anyway waku waku schedule it", "waku waku"),  # embedded in speech
-    ("walku waku", "waku waku"),             # one-letter mangle → fuzzy match
-    ("Hey Waku", "hey waku"),
+    ("weasley", "weasley"),
+    ("Weasley!", "weasley"),                         # punctuation
+    ("wesley", "weasley"),                           # one-letter transcription miss
+    ("so anyway hey weasley schedule it", "hey weasley"),  # embedded in speech
+    ("Hey Weasley", "hey weasley"),
     ("hey computer, what's up", "hey computer"),
-    # regression from the first live session: whisper wrote the wake word in
-    # kana — variants after a comma cover other scripts
-    ("わくわく", "waku waku,わくわく"),
-    ("わくわくわく", "waku waku,わくわく"),
-    ("小助手你好", "waku waku,小助手"),
+    ("小助手你好", "hey weasley,小助手"),             # explicit multilingual variant
 ]
 
 SHOULD_NOT_WAKE = [
-    ("what a nice day", "waku waku"),
-    ("wake up call at nine", "waku waku"),
-    ("", "waku waku"),
-    ("waku waku", ""),                        # no wake word configured
-    ("walk to work", "waku waku"),
+    ("what a nice day", "hey weasley"),
+    ("wake up call at nine", "hey weasley"),
+    ("", "hey weasley"),
+    ("hey weasley", ""),                              # no wake word configured
+    ("we sell things", "hey weasley"),
 ]
 
 

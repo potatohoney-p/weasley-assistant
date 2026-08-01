@@ -1,10 +1,10 @@
 ---
 name: Feature request
-about: A capability waku doesn't have yet
+about: A capability weasley-assistant doesn't have yet
 ---
 
 **What you're trying to do** — the goal, not the implementation. What are you
-trying to get waku to do for you?
+trying to get weasley-assistant to do for you?
 
 **Where it belongs on the [footprint ladder](../../CONTRIBUTING.md)** — every
 registered tool ships in every prompt, so the core stays narrow. Could this be:

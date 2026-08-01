@@ -2,9 +2,9 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "waku-dashboard",
+      "name": "weasley-assistant-dashboard",
       "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["-m", "waku.ops.dashboard"],
+      "runtimeArgs": ["-m", "weasley_assistant.ops.dashboard"],
       "port": 7777,
       "autoPort": false
     },

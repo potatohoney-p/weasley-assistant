@@ -5,7 +5,7 @@
  *                     the model can call directly. No network, no LLM guessing —
  *                     your TypeScript is the source of truth.
  *   2. GUARD A VERB → on("tool_call"): the "Team Rocket" guard blocks any bash
- *                     command that tries to wipe waku's runtime data (.waku, the
+ *                     command that tries to wipe weasley-assistant's runtime data (.weasley/assistant, the
  *                     Pokemon Center). 10 lines = a working permission system.
  *
  * Load it for a quick test:   pi -e .pi/extensions/pokemon-battle.ts
@@ -64,9 +64,9 @@ const typeMatchup = defineTool({
 	},
 });
 
-// Team Rocket guard: hands off the Pokemon Center (.waku runtime data).
-// Blocks the exact mistake waku's own rules forbid — wiping .waku or `rm -rf /`.
-const ROCKET = /\brm\b[^\n]*\s(-[rRfF]+\s+)?(\.waku(\/|\b)|\/\s|~\/?\s*$)/;
+// Team Rocket guard: hands off the Pokemon Center (.weasley/assistant runtime data).
+// Blocks the exact mistake weasley-assistant's own rules forbid — wiping .weasley/assistant or `rm -rf /`.
+const ROCKET = /\brm\b[^\n]*\s(-[rRfF]+\s+)?(\.weasley/assistant(\/|\b)|\/\s|~\/?\s*$)/;
 
 export default function pokemonBattle(pi: ExtensionAPI) {
 	pi.registerTool(typeMatchup);
@@ -78,7 +78,7 @@ export default function pokemonBattle(pi: ExtensionAPI) {
 			return {
 				block: true,
 				reason:
-					"Team Rocket guard: that command targets the Pokemon Center (.waku " +
+					"Team Rocket guard: that command targets the Pokemon Center (.weasley/assistant " +
 					"runtime data / root). Blocked. Back up first or narrow the path.",
 			};
 		}

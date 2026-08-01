@@ -1,4 +1,4 @@
-﻿"""DETERMINISTIC EVAL — the gh tool's read-only boundary, proven offline.
+"""DETERMINISTIC EVAL — the gh tool's read-only boundary, proven offline.
 
 CI has no `gh` and no GitHub credentials, so nothing here asserts "reading
 really works" — that is verified by hand against a live repo. What CAN be
@@ -29,7 +29,7 @@ import subprocess
 
 import pytest
 
-from waku.tools import github
+from weasley_assistant.tools import github
 
 
 class Boom(Exception):
@@ -220,11 +220,11 @@ def test_the_tool_is_off_unless_asked_for(tmp_path):
     must not appear for people who never asked for it (CLAUDE.md's footprint
     ladder). The gather workflow imports this module directly and works with
     the switch off — the switch only decides whether the MODEL can reach it."""
-    from evals.helpers import ScriptedClient, make_waku
+    from evals.helpers import ScriptedClient, make_assistant
 
-    off = make_waku(tmp_path / "off", client=ScriptedClient([]), gh_tool=False)
+    off = make_assistant(tmp_path / "off", client=ScriptedClient([]), gh_tool=False)
     assert "github_read" not in off.tools._tools
-    on = make_waku(tmp_path / "on", client=ScriptedClient([]), gh_tool=True)
+    on = make_assistant(tmp_path / "on", client=ScriptedClient([]), gh_tool=True)
     assert "github_read" in on.tools._tools
 
 

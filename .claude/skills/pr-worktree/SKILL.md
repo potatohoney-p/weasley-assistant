@@ -1,4 +1,4 @@
-﻿---
+---
 name: pr-worktree
 description: >
   Create and tear down the throwaway git worktrees used to test community PRs
@@ -17,8 +17,8 @@ must never leave a second copy of Sean's API keys on disk. Both have happened.
 REPO=$(git rev-parse --show-toplevel)
 N=<pr-number>
 git -C $REPO fetch -q origin pull/$N/head:pr-$N
-git -C $REPO worktree add -q ~/Developer/waku-prs/pr$N pr-$N
-ln -sfn $REPO/.waku ~/Developer/waku-prs/pr$N/.waku   # real memory/traces/calendar
+git -C $REPO worktree add -q ~/Developer/weasley-assistant-prs/pr$N pr-$N
+ln -sfn $REPO/.weasley/assistant ~/Developer/weasley-assistant-prs/pr$N/.weasley/assistant   # real memory/traces/calendar
 ```
 
 Never `gh pr checkout` — it switches the branch of the main working tree, and the
@@ -31,7 +31,7 @@ contributor code never runs against real credentials. Link it only after you hav
 read the diff:
 
 ```bash
-ln -sfn $REPO/.env ~/Developer/waku-prs/pr$N/.env
+ln -sfn $REPO/.env ~/Developer/weasley-assistant-prs/pr$N/.env
 ```
 
 ### The symlink trap (this cost us a full copy of every key)
@@ -47,12 +47,12 @@ So: after any test that saved settings, assume the `.env` is a real file and
 main `.env` rather than losing it.
 
 ```bash
-[ -L ~/Developer/waku-prs/pr$N/.env ] && echo "symlink (safe)" || echo "REAL FILE — copy of all keys"
+[ -L ~/Developer/weasley-assistant-prs/pr$N/.env ] && echo "symlink (safe)" || echo "REAL FILE — copy of all keys"
 ```
 
 New env vars a PR introduces belong in the **main** `.env`, not the worktree's.
 Copy the values across without printing them, and leave switches that would change
-what the live demo shows (e.g. `WAKU_EPISODIC_STORE`) on their old value — Sean
+what the live demo shows (e.g. `WEASLEY_ASSISTANT_EPISODIC_STORE`) on their old value — Sean
 films against the local data.
 
 ## Running its dashboard
@@ -60,8 +60,8 @@ films against the local data.
 Always a second port, so 7777 stays untouched:
 
 ```bash
-cd ~/Developer/waku-prs/pr$N
-WAKU_DASHBOARD_PORT=7778 $REPO/.venv/bin/python -m waku.ops.dashboard
+cd ~/Developer/weasley-assistant-prs/pr$N
+WEASLEY_ASSISTANT_DASHBOARD_PORT=7778 $REPO/.venv/bin/python -m weasley_assistant.ops.dashboard
 ```
 
 Optional extras a PR needs (`[notion]`, `[discord]`, …) install with `uv`, since
@@ -83,11 +83,11 @@ REPO=$(git rev-parse --show-toplevel)
 # 2. stop anything still running from it
 lsof -ti:7778 | xargs kill -9 2>/dev/null
 # 3. remove worktrees + their local branches
-for d in ~/Developer/waku-prs/*/; do git -C $REPO worktree remove --force "$d"; done
+for d in ~/Developer/weasley-assistant-prs/*/; do git -C $REPO worktree remove --force "$d"; done
 git -C $REPO worktree prune
 git -C $REPO branch --list 'pr-*' | tr -d ' ' | xargs -r -n1 git -C $REPO branch -D
 # 4. verify nothing is left holding keys
-find ~/Developer/waku-prs -name ".env" 2>/dev/null
+find ~/Developer/weasley-assistant-prs -name ".env" 2>/dev/null
 ```
 
 That `find` must print nothing. If it prints a path, the key copy is still there.
@@ -95,7 +95,7 @@ That `find` must print nothing. If it prints a path, the key copy is still there
 ## Checklist before you say a PR is done
 
 - [ ] new env vars moved into the main `.env`
-- [ ] `find ~/Developer/waku-prs -name ".env"` prints nothing
+- [ ] `find ~/Developer/weasley-assistant-prs -name ".env"` prints nothing
 - [ ] `git worktree list` shows only the main tree
 - [ ] no `pr-*` branches left
 - [ ] nothing still listening on 7778

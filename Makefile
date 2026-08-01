@@ -8,34 +8,33 @@
 # `source .venv/bin/activate` — both work, this is just fewer steps.
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python)
 
-.PHONY: run voice telegram discord brief dashboard trace eval eval-judge gate lint
-.PHONY: run voice telegram whatsapp brief dashboard trace eval eval-judge gate lint
+.PHONY: run voice telegram discord whatsapp brief gather dashboard trace eval eval-judge gate shootout shootout-coding lint
 
-run:            ## chat with Waku in the terminal
-	$(PY) -m waku
+run:            ## chat with Weasley Assistant in the terminal
+	$(PY) -m weasley_assistant
 
-voice:          ## talk to it — push-to-talk, or always-on with WAKU_WAKE_WORD
-	$(PY) -m waku voice
+voice:          ## talk to it — push-to-talk, or always-on with WEASLEY_ASSISTANT_WAKE_WORD
+	$(PY) -m weasley_assistant voice
 
 telegram:       ## phone → laptop (needs TELEGRAM_BOT_TOKEN in .env)
-	$(PY) -m waku telegram
+	$(PY) -m weasley_assistant telegram
 
 discord:        ## Discord → laptop (needs DISCORD_BOT_TOKEN in .env)
-	$(PY) -m waku discord
+	$(PY) -m weasley_assistant discord
 whatsapp:       ## WhatsApp → laptop (needs WHATSAPP_TOKEN in .env, public URL)
-	$(PY) -m waku whatsapp
+	$(PY) -m weasley_assistant whatsapp
 
 brief:          ## morning briefing from calendar + mail + memory (as a LOOP)
-	$(PY) -m waku brief
+	$(PY) -m weasley_assistant brief
 
 gather:         ## same job as a GRAPH: 4 sources in parallel, then one digest
-	$(PY) -m waku gather
+	$(PY) -m weasley_assistant gather
 
 # The server holds dashboard.py in memory: static JS/CSS reload on refresh, but
 # Python routes do NOT. After pulling a change that touches dashboard.py (or any
 # imported module), stop this and re-run it, or the UI shows stale backend data.
 dashboard:      ## everything on one page — http://localhost:7777 (restart after a backend pull)
-	$(PY) -m waku.ops.dashboard
+	$(PY) -m weasley_assistant dashboard
 
 trace:          ## deep trace waterfalls (Phoenix) at http://localhost:6006
 	$(PY) -m phoenix.server.main serve
@@ -47,7 +46,7 @@ eval-judge:     ## LLM-as-judge evals (scored %, needs an API key)
 	$(PY) -m pytest -q evals/judge
 
 gate:           ## the release gate: deterministic must pass, judge must clear threshold
-	$(PY) -m waku.ops.release_gate
+	$(PY) -m weasley_assistant.ops.release_gate
 
 shootout:       ## same tasks, different brains: make shootout RUNS="kimi:kimi-k3 anthropic:claude-opus-4-8"
 	$(PY) scripts/shootout.py $(RUNS)
@@ -56,5 +55,5 @@ shootout-coding: ## coding round via pi, scored by tests: make shootout-coding R
 	$(PY) scripts/shootout.py $(RUNS) --coding
 
 lint:
-	$(PY) -m ruff check waku evals scripts
+	$(PY) -m ruff check weasley_assistant evals scripts
 

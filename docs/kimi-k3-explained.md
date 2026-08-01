@@ -1,6 +1,6 @@
 # Kimi K3, explained for a stats brain
 
-A companion to the whiteboard in [`docs/whiteboards/k3-architecture.excalidraw`](whiteboards/k3-architecture.excalidraw).
+A standalone explanation of the Kimi K3 architecture.
 Written for someone who knows statistics well but hasn't touched deep learning in a
 while. Every concept is anchored to something you already use — weighted averages,
 online estimators, mixture models, boosting, memoization — so the jargon stops being
@@ -204,7 +204,7 @@ FP4 (low-precision numbers → 4x smaller). Each attacks one part of the wall.
 The 6.3x / 25% / 2.5x figures are **vendor claims** from Moonshot's own blog; open
 weights don't drop until Jul 27, 2026, so nobody has independently verified them.
 Opus and Fable internals are undisclosed, so the "vs" is one-directional — you can only
-draw K3. That gap is exactly why the plan is to test it live in Waku (same agent, same
+draw K3. That gap is exactly why the plan is to test it live in Weasley Assistant (same agent, same
 tasks, measured on pass rate, dollars, and latency) rather than trust the slide.
 
 *Sources: Moonshot / MarkTechPost, Jul 16 2026; Simon Willison, Jul 16 2026.*

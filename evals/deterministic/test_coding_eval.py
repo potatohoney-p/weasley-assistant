@@ -1,22 +1,21 @@
-"""DETERMINISTIC EVAL — the cross-model coding runner (waku.ops.coding_eval).
+"""DETERMINISTIC EVAL — the cross-model coding runner (weasley_assistant.ops.coding_eval).
 
-We can't call a real model in a hermetic test, so we stub pi with /bin/true (a
-no-op that exits 0) and let the seeded files + the real `verify` command decide
-the verdict. That exercises everything that isn't the model: file seeding,
-provider/key guards, and — the whole point — that the score is the verify exit
-code, not pi's prose."""
+We can't call a real model in a hermetic test, so we stub pi with the current
+Python runtime (which starts and exits on pi's unknown flags) and let the seeded
+files + the real `verify` command decide the verdict. That exercises everything
+that isn't the model: file seeding, provider/key guards, and — the whole point —
+that the score is the verify exit code, not pi's prose."""
 
 from __future__ import annotations
 
-import shutil
+import sys
 
-from waku.ops import coding_eval as ce
-
-_TRUE = shutil.which("true") or "/usr/bin/true"   # a real no-op binary, exits 0
+from evals.helpers import coding_python_command
+from weasley_assistant.ops import coding_eval as ce
 
 
 def _stub_pi(monkeypatch):
-    monkeypatch.setattr(ce.shutil, "which", lambda name: _TRUE)
+    monkeypatch.setattr(ce.shutil, "which", lambda _name: sys.executable)
 
 
 def test_verify_pass_is_the_verdict(tmp_path, monkeypatch):
@@ -25,7 +24,8 @@ def test_verify_pass_is_the_verdict(tmp_path, monkeypatch):
     case = {"id": "ok", "input": "n/a",
             "files": {"fizzbuzz.py": "def fizzbuzz(n):\n"
                       "    return 'FizzBuzz' if n%15==0 else 'Fizz' if n%3==0 else 'Buzz' if n%5==0 else str(n)\n"},
-            "verify": "python3 -c \"from fizzbuzz import fizzbuzz; assert fizzbuzz(15)=='FizzBuzz'; print('ok')\""}
+            "verify": coding_python_command(
+                "from fizzbuzz import fizzbuzz; assert fizzbuzz(15)=='FizzBuzz'; print('ok')")}
     passed, why, _secs = ce.run_coding_case("anthropic", "claude-opus-4-8", case)
     assert passed and why == "tests pass"
 
@@ -35,7 +35,8 @@ def test_verify_fail_when_code_is_wrong(tmp_path, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")
     case = {"id": "bad", "input": "n/a",
             "files": {"fizzbuzz.py": "def fizzbuzz(n):\n    return 'wrong'\n"},
-            "verify": "python3 -c \"from fizzbuzz import fizzbuzz; assert fizzbuzz(3)=='Fizz'\""}
+            "verify": coding_python_command(
+                "from fizzbuzz import fizzbuzz; assert fizzbuzz(3)=='Fizz'")}
     passed, _why, _ = ce.run_coding_case("anthropic", "claude-opus-4-8", case)
     assert not passed                       # pi 'ran' but the code fails verify
 
@@ -80,7 +81,8 @@ def test_stream_runner_scores_by_verify_and_emits_lines(tmp_path, monkeypatch):
         "anthropic", "claude-opus-4-8",
         task="n/a",
         files={"fizzbuzz.py": "def fizzbuzz(n):\n    return 'FizzBuzz' if n%15==0 else str(n)\n"},
-        verify="python3 -c \"from fizzbuzz import fizzbuzz; assert fizzbuzz(15)=='FizzBuzz'\"",
+        verify=coding_python_command(
+            "from fizzbuzz import fizzbuzz; assert fizzbuzz(15)=='FizzBuzz'"),
         on_line=lines.append)
     assert passed is True and why == "tests pass"
     assert any(ln.startswith("$ pi") for ln in lines)   # the launch line streamed
