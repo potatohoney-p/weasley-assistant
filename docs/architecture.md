@@ -1,6 +1,6 @@
 # Architecture — the whiteboard, refreshed
 
-The same system as the two whiteboard diagrams from the previous videos
+The same system shown in the project architecture views
 (the generic Harness/Loop/Memory/LLM-Ops one and the Hermes-specific one),
 now with a file path on every box.
 

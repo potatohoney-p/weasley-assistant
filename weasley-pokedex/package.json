@@ -1,0 +1,22 @@
+{
+  "name": "weasley-pokedex",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Weasley Assistant example package with a Pokedex skill, type-matchup tool, and runtime-data guard.",
+  "keywords": [
+    "pi-package",
+    "weasley"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  }
+}

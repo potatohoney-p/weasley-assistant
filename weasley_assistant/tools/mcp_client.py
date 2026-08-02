@@ -1,8 +1,7 @@
 """Validated, failure-isolated Model Context Protocol bridge.
 
-Configuration lives at ``WEASLEY_ASSISTANT_HOME/mcp.json``. Legacy homes may
-be copied by :mod:`weasley_assistant.config` during migration, but new writes use the public
-Weasley Assistant home exclusively.
+Configuration lives at ``WEASLEY_ASSISTANT_HOME/mcp.json`` and all writes use
+the public Weasley Assistant home exclusively.
 """
 
 from __future__ import annotations

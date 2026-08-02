@@ -78,13 +78,10 @@ WEASLEY_ASSISTANT_HISTORY_TURNS=12
 Provider credentials keep their standard names, such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
 or `GEMINI_API_KEY`. See [`.env.example`](.env.example) for all gateways and optional backends.
 
-### Migration compatibility
+### Weasley namespace
 
-Pre-rename environment variables remain one-way migration fallbacks when their public equivalents are
-absent. Likewise, an existing pre-rename cwd-local home is copied once when the new default does not yet
-exist; the source is never modified or deleted. New configuration, documentation, and dashboard writes
-use only `WEASLEY_ASSISTANT_*`. A narrow deprecated import and module-entry shim remains solely so
-existing installations can transition without losing access.
+Configuration, documentation, dashboard writes, and package imports use the
+`WEASLEY_ASSISTANT_*`, `~/.weasley/assistant`, and `weasley_assistant` namespaces exclusively.
 
 ### MCP connectors
 
