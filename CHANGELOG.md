@@ -2,6 +2,14 @@
 
 All notable changes to Weasley Assistant are documented here.
 
+## [0.1.2] - 2026-08-02
+
+### Fixed
+- Made `--help`, `help`, `--version`, and `version` lightweight CLI commands that exit successfully.
+- Made gateway, operations, and skill help render without starting services or making network requests.
+- Required `skill install` to receive exactly one URL and report invalid usage with exit code 2.
+- Made unknown commands return exit code 2 with an actionable usage message.
+
 ## [0.1.1] - 2026-08-02
 
 ### Added

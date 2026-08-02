@@ -30,4 +30,4 @@ def test_public_cli_and_package_are_shipped():
 def test_public_package_exports_version_consistently():
     import weasley_assistant
 
-    assert weasley_assistant.__version__ == "0.1.1"
+    assert weasley_assistant.__version__ == "0.1.2"

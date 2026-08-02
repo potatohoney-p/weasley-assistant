@@ -1,6 +1,6 @@
 [project]
 name = "weasley-assistant"
-version = "0.1.1"
+version = "0.1.2"
 description = "A transparent, local-first AI assistant with tools, memory, gateways, and evaluation."
 readme = "README.md"
 license = "Apache-2.0"
