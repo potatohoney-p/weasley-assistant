@@ -19,15 +19,13 @@ def test_public_cli_and_package_are_shipped():
     assert project["project"]["scripts"] == {
         "weasley-assistant": "weasley_assistant.__main__:main"
     }
-    assert "weasley_assistant" in project["tool"]["hatch"]["build"]["targets"]["wheel"][
-        "packages"
+    assert project["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == [
+        "weasley_assistant"
     ]
     assert (REPO / "weasley_assistant" / "app.py").is_file()
-    legacy_package = "wa" + "ku"
-    assert not (REPO / legacy_package / "app.py").exists()
 
 
 def test_public_package_exports_version_consistently():
     import weasley_assistant
 
-    assert weasley_assistant.__version__ == "0.1.2"
+    assert weasley_assistant.__version__ == "0.2.0"

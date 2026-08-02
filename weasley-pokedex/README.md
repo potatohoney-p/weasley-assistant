@@ -1,4 +1,4 @@
-# pi-pokedex
+# Weasley Pokedex
 
 A tiny [pi](https://github.com/earendil-works/pi) package that bundles a **skill**
 and an **extension** into one installable unit — the "earn your badge and ship it"
@@ -15,15 +15,14 @@ What's inside:
 ## Install
 
 ```bash
-pi install ./pi-pokedex          # local path
-pi install git:github.com/<you>/pi-pokedex   # or from git, for your team
+pi install ./weasley-pokedex     # local source checkout
 pi list                          # confirm it's registered
 ```
 
 Try it without installing (temporary, this run only):
 
 ```bash
-pi -e ./pi-pokedex -p "What is super-effective against Charizard?"
+pi -e ./weasley-pokedex -p "What is super-effective against Charizard?"
 ```
 
 ## The point

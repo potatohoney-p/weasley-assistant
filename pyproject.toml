@@ -1,6 +1,6 @@
 [project]
 name = "weasley-assistant"
-version = "0.1.2"
+version = "0.2.0"
 description = "A transparent, local-first AI assistant with tools, memory, gateways, and evaluation."
 readme = "README.md"
 license = "Apache-2.0"
@@ -112,12 +112,12 @@ build-backend = "hatchling.build"
 # stay on GitHub, where people actually read them; none belongs in a package download.
 [tool.hatch.build.targets.sdist]
 exclude = [
-    "docs", "examples", "pi-pokedex",
+    "docs", "examples", "weasley-pokedex",
     ".claude", ".agents", ".pi", ".deepeval", ".github",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["weasley_assistant", "waku"]
+packages = ["weasley_assistant"]
 
 # The bundled skills live at the repo root because that is where contributors
 # add them (CONTRIBUTING.md, CI's validate-skills job, `skills/community/`).

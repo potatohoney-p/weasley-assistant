@@ -1,14 +1,8 @@
-"""Weasley Assistant configuration.
-
-Public settings use ``WEASLEY_ASSISTANT_*``. Pre-rename names are read only
-when the corresponding public name is absent, keeping existing installations
-working without leaking the retired namespace into new configuration.
-"""
+"""Weasley Assistant configuration using the ``WEASLEY_ASSISTANT_*`` namespace."""
 
 from __future__ import annotations
 
 import os
-import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -17,18 +11,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 PUBLIC_ENV_PREFIX = "WEASLEY_ASSISTANT_"
-# Keep the retired spelling out of the implementation's public source while
-# retaining a one-way migration path for existing environments and homes.
-LEGACY_ENV_PREFIX = "WA" + "KU_"
-LEGACY_HOME_NAME = "." + "wa" + "ku"
 
 
 def env_value(name: str, default: str | None = None) -> str | None:
-    """Read a public setting, falling back to its legacy migration name."""
-    public_name = f"{PUBLIC_ENV_PREFIX}{name}"
-    if public_name in os.environ:
-        return os.environ[public_name]
-    return os.environ.get(f"{LEGACY_ENV_PREFIX}{name}", default)
+    """Read a setting from the public Weasley Assistant namespace."""
+    return os.environ.get(f"{PUBLIC_ENV_PREFIX}{name}", default)
 
 
 def _enabled(name: str) -> bool:
@@ -40,25 +27,6 @@ def default_home() -> Path:
     if configured:
         return Path(configured).expanduser()
     return Path.home() / ".weasley" / "assistant"
-
-
-def _migrate_legacy_default_home(target: Path) -> None:
-    """Copy the pre-rename cwd-local home once, without modifying the source.
-
-    Explicit public or legacy home values never trigger this fallback. A fresh
-    installation starts at the new default, while an existing checkout can be
-    picked up safely on first launch.
-    """
-    if "WEASLEY_ASSISTANT_HOME" in os.environ or f"{LEGACY_ENV_PREFIX}HOME" in os.environ:
-        return
-    expected = Path.home() / ".weasley" / "assistant"
-    if target.expanduser().resolve() != expected.resolve():
-        return
-    legacy = Path.cwd() / LEGACY_HOME_NAME
-    if target.exists() or not legacy.is_dir() or legacy.resolve() == target.resolve():
-        return
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(legacy, target, symlinks=True)
 
 
 @dataclass
@@ -110,7 +78,6 @@ class Settings:
 
     def ensure_home(self) -> Path:
         self.home = self.home.expanduser()
-        _migrate_legacy_default_home(self.home)
         self.home.mkdir(parents=True, exist_ok=True)
         (self.home / "traces").mkdir(exist_ok=True)
         (self.home / "outbox").mkdir(exist_ok=True)
