@@ -117,7 +117,7 @@ class Session:
     def switch(self, session_id: str) -> None:
         self.session_id = session_id
         self.history = []
-        if self.memory is None:
+        if self.memory is None or self.settings.history_turns <= 0:
             return
         # only the recent tail of a past conversation goes back into working
         # memory (respond() also windows it, but don't hold the whole thread)

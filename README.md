@@ -75,6 +75,12 @@ WEASLEY_ASSISTANT_MAX_TOKENS=8192
 WEASLEY_ASSISTANT_HISTORY_TURNS=12
 ```
 
+`WEASLEY_ASSISTANT_HISTORY_TURNS` limits prior conversation turns included in each
+model request and reloaded when switching sessions. Set it to `0` to exclude prior
+turns; negative values also use an empty history window. Saved conversations stay
+available in the dashboard and database. This setting does not disable the separate
+durable-memory retrieval gate or procedural skills.
+
 Provider credentials keep their standard names, such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
 or `GEMINI_API_KEY`. See [`.env.example`](.env.example) for all gateways and optional backends.
 

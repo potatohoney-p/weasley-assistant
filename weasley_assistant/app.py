@@ -120,8 +120,9 @@ class WeasleyAssistant:
         # each) enter the prompt, so context/cost/latency stay flat no matter
         # how long the conversation runs. Older turns live in state.db and
         # come back via the retrieval gate + episodic memory when relevant.
-        window = self.settings.history_turns * 2
-        messages = self.session.history[-window:] + [{"role": "user", "content": user_message}]
+        window = max(0, self.settings.history_turns) * 2
+        history = self.session.history[-window:] if window else []
+        messages = history + [{"role": "user", "content": user_message}]
 
         return run_loop(
             client=self.client,
