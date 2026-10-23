@@ -108,6 +108,30 @@ The file is validated against [`weasley_assistant/tools/mcp.schema.json`](weasle
 connector thread starts. Server failures are isolated, and all sessions and the event-loop thread
 are closed when the assistant is rebuilt or stopped.
 
+### GitHub in the morning gather
+
+`weasley-assistant gather` reads GitHub through the official `gh` CLI. Install it
+from [cli.github.com](https://cli.github.com/), then run `gh auth login` yourself.
+Set `WEASLEY_ASSISTANT_GH_REPO=owner/repo`, or run from a Git checkout to use its
+repository. Gather reads GitHub even when `WEASLEY_ASSISTANT_GH_TOOL` is off; that
+flag only controls whether the chat model can call the read-only GitHub tool.
+
+The scan requests at most 20 open PRs and 20 open issues. Its counts describe
+the rows fetched, not repository-wide totals. If either read fails, the briefing
+input retains that read's diagnostic (such as missing `gh`, login required, or
+timeout) alongside any successful results. An unavailable read counts as zero
+for routing, but is labelled unavailable rather than empty. The existing quiet
+route still writes no outbox draft when all GitHub and calendar counts are zero.
+
+Verify CLI access separately with `gh pr list --repo owner/repo --limit 1` and
+`gh issue list --repo owner/repo --limit 1`. The offline regression suite below
+checks the real gather binding with simulated CLI results; it does not verify
+your GitHub authentication or make paid model calls:
+
+```bash
+python -m pytest -q evals/deterministic/test_gather_github_binding.py
+```
+
 ## Project structure
 
 | Area | Location |
