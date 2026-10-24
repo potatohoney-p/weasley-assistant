@@ -87,6 +87,10 @@ def run_graph(graph: Graph, state: dict,
 - **Routers** are ordinary Python functions over state — not LLM calls by default. When
   a decision needs a model, the node *before* the router makes the LLM call and writes
   e.g. `state["score"]`; the router just reads it. Keeps routing testable with 0/1 evals.
+  Every wave's node outputs and errors are merged before any router runs, so a router
+  sees completed sibling results regardless of node insertion order. Node-end events
+  for that wave precede its route events. Routers remain synchronous; this does not
+  add async routing or change exception handling for arbitrary router code.
 - **Cycles**: allowed only via an explicit router edge pointing backwards, guarded twice:
   per-node `max_visits` and global `max_steps` — the same two-guardrail pattern as
   `run_loop`'s natural-stop + max_iterations.

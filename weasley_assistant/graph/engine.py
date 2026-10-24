@@ -181,6 +181,11 @@ def run_graph(graph: Graph, state: dict, observer: Observer | None = None,
                                 "ms": ms, "keys": keys, "error": error})
             if error:
                 errors[name] = error
+
+        # A router reads the completed wave, not an insertion-order-dependent
+        # prefix of its siblings' results. Settle every write/error first.
+        for name, _out, error, _ms in results:
+            if error:
                 if graph.nodes[name].on_error:
                     jumps.append(graph.nodes[name].on_error)
                 continue  # no on_error → fire nothing; the run drains to END
