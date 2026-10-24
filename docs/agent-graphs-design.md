@@ -90,6 +90,10 @@ def run_graph(graph: Graph, state: dict,
 - **Cycles**: allowed only via an explicit router edge pointing backwards, guarded twice:
   per-node `max_visits` and global `max_steps` — the same two-guardrail pattern as
   `run_loop`'s natural-stop + max_iterations.
+- **Node outputs**: return a dict with string keys, or `None` for no writes.
+  Malformed outputs are node errors: no output keys merge, the normal
+  `on_error` target runs when configured, and otherwise that branch drains.
+  Underscore-prefixed keys remain excluded from the shared state.
 - **Errors**: a node exception is written to `state["errors"][node]` and routes to END
   through an optional `on_error` target — mirrors `ToolRegistry.execute`'s
   surface-don't-crash rule.

@@ -42,7 +42,7 @@ Observer = Callable[[str, dict], None]
 START = "START"
 END = "END"
 
-NodeFn = Callable[[dict], dict]  # reads state, returns keys to merge
+NodeFn = Callable[[dict], dict | None]  # None means no writes
 RouteFn = Callable[[dict], str]  # reads state, returns a target label
 
 
@@ -143,7 +143,13 @@ def run_graph(graph: Graph, state: dict, observer: Observer | None = None,
         t = time.perf_counter()
         try:
             out = node.fn(snapshot)
-            return name, out or {}, None, int((time.perf_counter() - t) * 1000)
+            if out is None:
+                out = {}
+            if not isinstance(out, dict):
+                raise TypeError("node output must be a dict or None")
+            if any(not isinstance(key, str) for key in out):
+                raise TypeError("node output keys must be strings")
+            return name, out, None, int((time.perf_counter() - t) * 1000)
         except Exception as exc:  # surface, don't crash — the run drains cleanly
             return name, None, repr(exc), int((time.perf_counter() - t) * 1000)
 
