@@ -56,7 +56,7 @@ class Node:
     fn: NodeFn
     kind: str = "fn"          # tool / llm / agent / router label for describe()
     max_visits: int = 1       # >1 only on nodes inside an intended cycle
-    on_error: str | None = None  # node to jump to if fn raises (default: drain to END)
+    on_error: str | None = None  # node/router failure recovery (default: drain to END)
 
 
 @dataclass
@@ -186,13 +186,24 @@ def run_graph(graph: Graph, state: dict, observer: Observer | None = None,
                 continue  # no on_error → fire nothing; the run drains to END
             if name in graph.routers:
                 route, targets = graph.routers[name]
-                label = route(state)
-                target = targets.get(label)
+                route_error = None
+                try:
+                    label = route(state)
+                    if not isinstance(label, str):
+                        raise TypeError("router must return a string label")
+                    target = targets.get(label)
+                    if target is None:
+                        route_error = f"router returned unknown label '{label}'"
+                except Exception as exc:
+                    route_error = f"router failed: {exc!r}"
+                    label = route_error
+                if route_error:
+                    errors[name] = route_error
+                    target = graph.nodes[name].on_error or END
                 notify("route", {"workflow": graph.name, "router": name,
-                                 "target": target or END, "reason": label})
-                if target is None:
-                    errors[name] = f"router returned unknown label '{label}'"
-                elif target != END:
+                                 "target": target, "reason": label,
+                                 **({"error": route_error} if route_error else {})})
+                if target != END:
                     jumps.append(target)  # a route is a jump, not a dependency
             else:
                 for src, dst in graph.edges:

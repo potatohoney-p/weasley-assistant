@@ -221,3 +221,17 @@ Each phase is one PR (topic branch → gate → squash-merge), shippable alone.
 5. **Graphs are opt-in structure around the loop** — `run_loop` untouched; `agent_node`
    composes it. The loop pillar's file does not change.
 6. **Copy the engine into AutoManus** rather than extracting a shared library.
+
+### Router failure reporting
+
+Router exceptions, non-string labels, and unknown labels are recorded in `state["errors"][node]` and
+follow that node's existing `on_error` target, or drain to END when absent. The
+`route` event reports the recovery target and an `error`; `graph_end` retains the
+failure even if recovery succeeds. A preceding successful `node_end` still means
+node computation completed, not that its subsequent routing succeeded. Recovery
+jumps obey the same visit/step guards as other jumps.
+
+This boundary does not roll back node outputs or router mutations. It does not
+catch observer failures, `KeyboardInterrupt`/`SystemExit`, or explicit parallel
+write collisions. Routers remain synchronous; nested state isolation and topology
+validation are unchanged.
