@@ -93,16 +93,31 @@ class Memory:
     def log_chat(self, user_message: str, reply: str, session_id: str = "default",
                  source: str = "cli", meta: dict | None = None) -> None:
         import json as _json
-        self.conn.execute(
-            "INSERT INTO chat_log (role, content, session_id, source) VALUES ('user', ?, ?, ?)",
-            (user_message, session_id, source),
-        )
-        # meta (gate/latency/iterations/tools) rides on the assistant row so a
-        # reopened thread can render the full turn card, not just the text.
-        self.conn.execute(
-            "INSERT INTO chat_log (role, content, session_id, source, meta) VALUES ('assistant', ?, ?, ?, ?)",
-            (reply, session_id, source, _json.dumps(meta) if meta else None),
-        )
+        # Serialize before writing either row. A malformed metadata value must
+        # not leave a user-only turn for the next successful call to commit.
+        encoded_meta = _json.dumps(meta) if meta else None
+        # A savepoint keeps the pair atomic even on autocommit connections and
+        # preserves unrelated pending writes on ordinary statement failures.
+        self.conn.execute("SAVEPOINT log_chat_exchange")
+        try:
+            self.conn.execute(
+                "INSERT INTO chat_log (role, content, session_id, source) VALUES ('user', ?, ?, ?)",
+                (user_message, session_id, source),
+            )
+            # Telemetry rides on the assistant row for reopened turn cards.
+            self.conn.execute(
+                "INSERT INTO chat_log (role, content, session_id, source, meta) "
+                "VALUES ('assistant', ?, ?, ?, ?)",
+                (reply, session_id, source, encoded_meta),
+            )
+        except Exception:
+            # SQLite may already have rolled back the whole transaction (for
+            # example, a RAISE(ROLLBACK) trigger). Preserve that original error.
+            if self.conn.in_transaction:
+                self.conn.execute("ROLLBACK TO SAVEPOINT log_chat_exchange")
+                self.conn.execute("RELEASE SAVEPOINT log_chat_exchange")
+            raise
+        self.conn.execute("RELEASE SAVEPOINT log_chat_exchange")
         self.conn.commit()
 
     # ---- sessions (for the dashboard's chat history + "New chat")
