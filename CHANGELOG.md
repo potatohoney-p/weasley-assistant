@@ -2,6 +2,12 @@
 
 All notable changes to Weasley Assistant are documented here.
 
+## Unreleased
+
+- Validate retrieval-gate decision, query and reason types before memory lookup.
+  Malformed fields and blank positive queries fail open using the original
+  message; omitted-field defaults and valid skip decisions remain unchanged.
+
 ## [0.2.0] - 2026-08-02
 
 ### Fixed

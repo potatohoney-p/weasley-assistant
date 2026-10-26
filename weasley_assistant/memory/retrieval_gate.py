@@ -37,7 +37,10 @@ def should_retrieve(
     client: anthropic.Anthropic, small_model: str, message: str
 ) -> tuple[bool, str, str]:
     """Returns (retrieve?, search_query, reason). Fails open: if the gate
-    itself errors, we retrieve — a stale memory beats a lost one."""
+    itself errors or supplies invalid fields, retrieve with the original message.
+    Legacy omitted fields retain defaults: retrieve=False, query=message, reason="".
+    A present decision must be boolean; query/reason must be text, and a positive
+    decision needs a nonblank query. This validates shape, not relevance."""
     try:
         response = client.messages.create(
             model=small_model,
@@ -50,6 +53,19 @@ def should_retrieve(
         if "{" not in text:   # a reasoning-only / truncated reply, not an error
             return True, message, "gate returned no JSON — failing open"
         decision = json.loads(text[text.index("{") : text.rindex("}") + 1])
-        return bool(decision.get("retrieve")), decision.get("query", message), decision.get("reason", "")
+        # Preserve omitted-field defaults, but do not coerce malformed model
+        # output into a decision or send non-text queries into memory stores.
+        retrieve = decision.get("retrieve", False)
+        query = decision.get("query", message)
+        reason = decision.get("reason", "")
+        if type(retrieve) is not bool:
+            raise TypeError("retrieve must be a boolean")
+        if not isinstance(query, str):
+            raise TypeError("query must be text")
+        if retrieve and not query.strip():
+            raise ValueError("retrieval requires a non-empty query")
+        if not isinstance(reason, str):
+            raise TypeError("reason must be text")
+        return retrieve, query, reason
     except Exception as exc:
         return True, message, f"gate failed open ({type(exc).__name__})"
