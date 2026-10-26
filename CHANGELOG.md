@@ -2,6 +2,12 @@
 
 All notable changes to Weasley Assistant are documented here.
 
+## Unreleased
+
+- Avoid replaying the full tool loop when triage graph execution fails after
+  the loop starts. Preserve its original exception or completed result;
+  failures before the full turn still fall back normally.
+
 ## [0.2.0] - 2026-08-02
 
 ### Fixed

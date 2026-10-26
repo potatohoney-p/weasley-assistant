@@ -64,20 +64,35 @@ class WeasleyAssistant:
         t0 = time.perf_counter()
 
         with self.tracer.turn(user_message):
-            # The graph front door is optional and can NEVER make WeasleyAssistant worse:
-            # flag off → this is exactly the old code path; flag on → the triage
-            # graph decides quick vs full, and any failure anywhere falls open
-            # to the plain loop below (same fail-open rule as the retrieval gate).
+            # Fallback may bypass broken triage, but must never replay a full
+            # turn: tools may already have committed effects before an error.
+            # Keep both its result and exception local to this one request.
+            full_started = False
+            full_result = None
+            full_error = None
+
+            def full_once(turn_notify):
+                nonlocal full_started, full_result, full_error
+                if not full_started:
+                    full_started = True
+                    try:
+                        full_result = self._run_full_turn(user_message, turn_notify, stream)
+                    except Exception as exc:
+                        full_error = exc
+                if full_error is not None:
+                    raise full_error
+                return full_result
+
             result = None
             if self.settings.graph_workflows:
                 try:
-                    result = self._respond_via_graph(user_message, notify, stream)
+                    result = self._respond_via_graph(user_message, notify, stream, full_fn=full_once)
                 except Exception as exc:
                     notify("graph_end", {"workflow": "triage", "ms": 0, "steps": 0,
                                          "path": [], "error": repr(exc)})
                     result = None
             if result is None:
-                result = self._run_full_turn(user_message, notify, stream)
+                result = full_once(notify)
 
             quick = captured.get("graph_route", {}).get("target") == "quick_reply"
 
@@ -135,10 +150,11 @@ class WeasleyAssistant:
             stream=stream,
         )
 
-    def _respond_via_graph(self, user_message: str, notify, stream: bool) -> LoopResult | None:
+    def _respond_via_graph(self, user_message: str, notify, stream: bool, *, full_fn) -> LoopResult | None:
         """One turn through the triage graph workflow. Returns None whenever
         the graph didn't produce an answer — respond() then falls open to the
-        plain loop, so this path can only ever ADD speed, never lose a reply."""
+        plain loop. The caller's full_fn guards against replaying a turn that
+        already started inside the graph."""
         from weasley_assistant.graph import run_graph
         from weasley_assistant.graph.workflows.triage import (
             QUICK_REPLY_PROMPT,
@@ -161,8 +177,7 @@ class WeasleyAssistant:
             quick_fn=quick_reply,
             # the full path is the SAME method the flag-off default runs; the
             # engine's tagged notifier stamps its inner events with node=
-            full_fn=lambda state: self._run_full_turn(
-                state["message"], state.get("_notify", notify), stream),
+            full_fn=lambda state: full_fn(state.get("_notify", notify)),
         )
         state = run_graph(graph, {"message": user_message}, observer=notify)
         if isinstance(state.get("result"), LoopResult):
