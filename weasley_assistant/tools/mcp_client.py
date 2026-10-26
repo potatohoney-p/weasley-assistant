@@ -233,6 +233,14 @@ class MCPBridge:
                 self._acall(server, tool, args), self._loop
             )
             return future.result(self.timeout)
+        except concurrent.futures.TimeoutError as exc:
+            # result(timeout) only stops the synchronous wait. Without cancelling
+            # its future, each timed-out request continues occupying the loop.
+            # This requests local cancellation, not rollback of remote effects.
+            future.cancel()
+            detail = f" ({exc})" if str(exc) else ""
+            return (f"MCP call {server}_{tool} timed out{detail}; local cancellation requested. "
+                    "Remote completion is unknown; do not automatically retry.")
         except Exception as exc:
             return f"MCP call {server}_{tool} failed: {exc}"
 

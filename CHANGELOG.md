@@ -2,6 +2,11 @@
 
 All notable changes to Weasley Assistant are documented here.
 
+## Unreleased
+
+- Cancel pending local MCP requests after a tool timeout and report that remote
+  completion remains unknown, rather than leaving requests active silently.
+
 ## [0.2.0] - 2026-08-02
 
 ### Fixed

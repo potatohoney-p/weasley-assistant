@@ -85,6 +85,12 @@ Configuration, documentation, dashboard writes, and package imports use the
 
 ### MCP connectors
 
+Timed-out tool calls request cancellation of the local pending request. A timeout
+does not establish whether the remote server finished or committed an effect;
+do not automatically retry a write without checking its outcome. Cooperative
+local cancellation keeps timed-out calls from accumulating in the bridge.
+
+
 Install the optional dependency and create `~/.weasley/assistant/mcp.json`:
 
 ```bash
