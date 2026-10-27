@@ -100,11 +100,13 @@ class Session:
         if tool_calls:
             summary = "; ".join(f"{c['tool']}({c['args']}) -> {c['output']}" for c in tool_calls)
             record = f"{reply}\n[tools used: {summary}]"
-        self.history.append({"role": "user", "content": user_message})
-        self.history.append({"role": "assistant", "content": record})
+        # Do not expose a failed write as a completed exchange in the next
+        # prompt. This ordering does not roll back tools or the memory backend.
         if self.memory is not None:
             self.memory.log_chat(user_message, record, session_id=self.session_id,
                                  source=source, meta=meta)
+        self.history.append({"role": "user", "content": user_message})
+        self.history.append({"role": "assistant", "content": record})
 
     # ---- session lifecycle (the "New chat" / history feature)
     # A session is just a tag on chat_log rows. Starting a new one clears working
