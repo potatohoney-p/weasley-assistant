@@ -105,8 +105,34 @@ class WeasleyAssistant:
             self.session.add_exchange(user_message, result.reply, tool_calls=result.tool_calls,
                                       source=source, meta=meta)
             if self.memory is not None:
-                self.memory.maybe_consolidate(notify=notify)
-                self.memory.export_markdown()   # keep MEMORY.md in sync
+                # Chat persistence is required; these derived-memory operations
+                # are not. Do not turn a committed reply into a failed request
+                # (and tempt a caller to replay tools) if housekeeping fails.
+                notification_error = None
+
+                def maintenance_notify(kind, event):
+                    nonlocal notification_error
+                    try:
+                        notify(kind, event)
+                    except Exception as exc:
+                        notification_error = exc
+                        raise
+
+                for operation, maintain in (
+                    ("consolidation", lambda: self.memory.maybe_consolidate(
+                        notify=maintenance_notify)),
+                    ("export_markdown", self.memory.export_markdown),
+                ):
+                    try:
+                        maintain()
+                    except Exception as exc:
+                        # Preserve the existing observer/tracer failure contract.
+                        if exc is notification_error:
+                            raise
+                        # Backend messages may contain private data or credentials.
+                        notify("maintenance_error", {"operation": operation,
+                                                     "error_type": type(exc).__name__,
+                                                     "chat_persisted": True})
 
         self.tracer.end_turn(result.reply, result.iterations)
         return result
