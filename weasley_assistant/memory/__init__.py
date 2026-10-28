@@ -152,12 +152,19 @@ class Memory:
         whiteboard's `~/~/.weasley/assistant/MEMORY.md` box is literally real, and "your memory
         is a file you can open" is true. state.db stays the queryable source of
         truth; this file is a generated view, refreshed after each turn."""
-        facts = self.conn.execute(
-            "SELECT subject, content FROM facts ORDER BY subject, id"
-        ).fetchall()
-        eps = self.conn.execute(
-            "SELECT happened_at, summary FROM episodes ORDER BY happened_at DESC, id DESC"
-        ).fetchall()
+        # One read snapshot spans both tables, including in WAL mode where a
+        # writer can commit between SELECTs. A savepoint nests inside a caller's
+        # transaction without committing/rolling it back. Release before file I/O.
+        self.conn.execute("SAVEPOINT memory_mirror")
+        try:
+            facts = self.conn.execute(
+                "SELECT subject, content FROM facts ORDER BY subject, id"
+            ).fetchall()
+            eps = self.conn.execute(
+                "SELECT happened_at, summary FROM episodes ORDER BY happened_at DESC, id DESC"
+            ).fetchall()
+        finally:
+            self.conn.execute("RELEASE memory_mirror")
         lines = [
             "# Weasley Assistant memory",
             "",
