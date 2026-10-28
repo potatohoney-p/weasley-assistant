@@ -171,7 +171,38 @@ class Memory:
         lines += [f"- **{f['subject']}** — {f['content']}" for f in facts] or ["_none yet_"]
         lines += ["", f"## Episodes — episodic memory ({len(eps)})", ""]
         lines += [f"- **{e['happened_at']}** — {e['summary']}" for e in eps] or ["_none yet_"]
-        (self.settings.home / "MEMORY.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        # Build/encode before opening a file. Publish only after the stage has
+        # closed successfully, so write/close errors leave the previous view.
+        import os
+        import stat
+        import tempfile
+
+        payload = ("\n".join(lines) + "\n").encode("utf-8")
+        target = self.settings.home / "MEMORY.md"
+        if target.is_symlink():
+            raise OSError("MEMORY.md must be a regular generated file, not a symlink")
+        try:
+            mode = target.stat().st_mode
+        except FileNotFoundError:
+            pass
+        else:
+            if not stat.S_ISREG(mode):
+                raise OSError("MEMORY.md must be a regular generated file")
+        staged = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb", dir=target.parent, prefix=".MEMORY.", suffix=".tmp", delete=False
+            ) as stream:
+                staged = Path(stream.name)
+                stream.write(payload)
+            os.replace(staged, target)
+        except BaseException:
+            if staged is not None:
+                try:
+                    staged.unlink(missing_ok=True)
+                except OSError:
+                    pass  # Best effort; do not hide the publication failure.
+            raise
 
     def maybe_consolidate(self, notify=None) -> None:
         new_facts = consolidation.consolidate_if_due(
