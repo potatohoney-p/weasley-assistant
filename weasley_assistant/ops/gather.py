@@ -38,19 +38,21 @@ def _github(settings) -> dict:
     from weasley_assistant.tools import github
 
     repo = getattr(settings, "gh_repo", "")
-    ok_p, prs = github.list_prs(repo, 20)
-    ok_i, issues = github.list_issues(repo, 20)
-    prs = prs if ok_p and isinstance(prs, list) else []
-    issues = issues if ok_i and isinstance(issues, list) else []
+    ok_p, pr_result = github.list_prs(repo, 20)
+    ok_i, issue_result = github.list_issues(repo, 20)
+    # Counts describe fetched rows, not errors or repository-wide totals. Keep
+    # the original failure text so synthesis can explain how to recover.
+    prs = pr_result if ok_p and isinstance(pr_result, list) else []
+    issues = issue_result if ok_i and isinstance(issue_result, list) else []
     lines = []
     if ok_p:
         lines.append("Open PRs:\n" + (github._format(prs) if prs else "(none)"))
     else:
-        lines.append(f"Open PRs: unavailable — {prs}")
+        lines.append(f"Open PRs: unavailable — {pr_result}")
     if ok_i:
         lines.append("Open issues:\n" + (github._format(issues) if issues else "(none)"))
     else:
-        lines.append(f"Open issues: unavailable — {issues}")
+        lines.append(f"Open issues: unavailable — {issue_result}")
     return {"gh_text": "\n\n".join(lines),
             "gh_open_prs": len(prs), "gh_open_issues": len(issues)}
 

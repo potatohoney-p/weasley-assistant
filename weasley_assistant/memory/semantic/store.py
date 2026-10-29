@@ -14,9 +14,12 @@ import sqlite3
 
 def _fts_query(text: str) -> str:
     """User text isn't a valid FTS5 query (quotes/punctuation break MATCH).
-    Reduce it to `word OR word OR ...` over alphanumeric tokens."""
-    words = re.findall(r"[a-zA-Z0-9]{2,}", text.lower())
-    return " OR ".join(dict.fromkeys(words)) if words else ""
+    Keep Unicode alphanumeric runs of at least two characters. Underscores
+    remain separators, as in the default unicode61 tokenizer. Quote each
+    token so user text cannot become FTS operators or column filters.
+    """
+    words = re.findall(r"[^\W_]{2,}", text.lower())
+    return " OR ".join(f'"{word}"' for word in dict.fromkeys(words))
 
 
 class SqliteFactStore:

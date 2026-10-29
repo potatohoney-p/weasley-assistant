@@ -42,7 +42,7 @@ Observer = Callable[[str, dict], None]
 START = "START"
 END = "END"
 
-NodeFn = Callable[[dict], dict]  # reads state, returns keys to merge
+NodeFn = Callable[[dict], dict | None]  # None means no writes
 RouteFn = Callable[[dict], str]  # reads state, returns a target label
 
 
@@ -56,7 +56,7 @@ class Node:
     fn: NodeFn
     kind: str = "fn"          # tool / llm / agent / router label for describe()
     max_visits: int = 1       # >1 only on nodes inside an intended cycle
-    on_error: str | None = None  # node to jump to if fn raises (default: drain to END)
+    on_error: str | None = None  # node/router failure recovery (default: drain to END)
 
 
 @dataclass
@@ -143,7 +143,13 @@ def run_graph(graph: Graph, state: dict, observer: Observer | None = None,
         t = time.perf_counter()
         try:
             out = node.fn(snapshot)
-            return name, out or {}, None, int((time.perf_counter() - t) * 1000)
+            if out is None:
+                out = {}
+            if not isinstance(out, dict):
+                raise TypeError("node output must be a dict or None")
+            if any(not isinstance(key, str) for key in out):
+                raise TypeError("node output keys must be strings")
+            return name, out, None, int((time.perf_counter() - t) * 1000)
         except Exception as exc:  # surface, don't crash — the run drains cleanly
             return name, None, repr(exc), int((time.perf_counter() - t) * 1000)
 
@@ -181,18 +187,34 @@ def run_graph(graph: Graph, state: dict, observer: Observer | None = None,
                                 "ms": ms, "keys": keys, "error": error})
             if error:
                 errors[name] = error
+
+        # A router reads the completed wave, not an insertion-order-dependent
+        # prefix of its siblings' results. Settle every write/error first.
+        for name, _out, error, _ms in results:
+            if error:
                 if graph.nodes[name].on_error:
                     jumps.append(graph.nodes[name].on_error)
                 continue  # no on_error → fire nothing; the run drains to END
             if name in graph.routers:
                 route, targets = graph.routers[name]
-                label = route(state)
-                target = targets.get(label)
+                route_error = None
+                try:
+                    label = route(state)
+                    if not isinstance(label, str):
+                        raise TypeError("router must return a string label")
+                    target = targets.get(label)
+                    if target is None:
+                        route_error = f"router returned unknown label '{label}'"
+                except Exception as exc:
+                    route_error = f"router failed: {exc!r}"
+                    label = route_error
+                if route_error:
+                    errors[name] = route_error
+                    target = graph.nodes[name].on_error or END
                 notify("route", {"workflow": graph.name, "router": name,
-                                 "target": target or END, "reason": label})
-                if target is None:
-                    errors[name] = f"router returned unknown label '{label}'"
-                elif target != END:
+                                 "target": target, "reason": label,
+                                 **({"error": route_error} if route_error else {})})
+                if target != END:
                     jumps.append(target)  # a route is a jump, not a dependency
             else:
                 for src, dst in graph.edges:

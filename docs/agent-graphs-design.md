@@ -87,9 +87,17 @@ def run_graph(graph: Graph, state: dict,
 - **Routers** are ordinary Python functions over state — not LLM calls by default. When
   a decision needs a model, the node *before* the router makes the LLM call and writes
   e.g. `state["score"]`; the router just reads it. Keeps routing testable with 0/1 evals.
+  Every wave's node outputs and errors are merged before any router runs, so a router
+  sees completed sibling results regardless of node insertion order. Node-end events
+  for that wave precede its route events. Routers remain synchronous; this does not
+  add async routing or change exception handling for arbitrary router code.
 - **Cycles**: allowed only via an explicit router edge pointing backwards, guarded twice:
   per-node `max_visits` and global `max_steps` — the same two-guardrail pattern as
   `run_loop`'s natural-stop + max_iterations.
+- **Node outputs**: return a dict with string keys, or `None` for no writes.
+  Malformed outputs are node errors: no output keys merge, the normal
+  `on_error` target runs when configured, and otherwise that branch drains.
+  Underscore-prefixed keys remain excluded from the shared state.
 - **Errors**: a node exception is written to `state["errors"][node]` and routes to END
   through an optional `on_error` target — mirrors `ToolRegistry.execute`'s
   surface-don't-crash rule.
@@ -221,3 +229,17 @@ Each phase is one PR (topic branch → gate → squash-merge), shippable alone.
 5. **Graphs are opt-in structure around the loop** — `run_loop` untouched; `agent_node`
    composes it. The loop pillar's file does not change.
 6. **Copy the engine into AutoManus** rather than extracting a shared library.
+
+### Router failure reporting
+
+Router exceptions, non-string labels, and unknown labels are recorded in `state["errors"][node]` and
+follow that node's existing `on_error` target, or drain to END when absent. The
+`route` event reports the recovery target and an `error`; `graph_end` retains the
+failure even if recovery succeeds. A preceding successful `node_end` still means
+node computation completed, not that its subsequent routing succeeded. Recovery
+jumps obey the same visit/step guards as other jumps.
+
+This boundary does not roll back node outputs or router mutations. It does not
+catch observer failures, `KeyboardInterrupt`/`SystemExit`, or explicit parallel
+write collisions. Routers remain synchronous; nested state isolation and topology
+validation are unchanged.

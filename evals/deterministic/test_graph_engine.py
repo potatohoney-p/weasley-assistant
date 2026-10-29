@@ -203,3 +203,59 @@ def test_reserved_underscore_keys_never_merge_or_leak():
     assert "_secret" not in state and state["open"] == 2
     assert dict(events)["node_end"]["keys"] == ["open"]
     assert "_notify" not in state                 # engine plumbing stays internal
+
+
+@pytest.mark.parametrize("order", [("left", "right"), ("right", "left")])
+def test_router_observes_all_completed_wave_writes(order):
+    g = Graph("wave-state")
+    for name in order:
+        g.add_node(Node(name, lambda s, name=name: {name: 1}))
+        g.add_edge(START, name)
+    g.add_node(Node("done", lambda s: {"done": True}))
+    g.add_router("left", lambda s: "go" if s["right"] == 1 else "stop",
+                 {"go": "done", "stop": END})
+    events, observer = collect_events()
+    state = run_graph(g, {"right": 0}, observer=observer)
+    assert state["done"] is True
+    assert dict(events)["graph_end"]["path"] == [*order, "done"]
+    first_route = next(i for i, (kind, _) in enumerate(events) if kind == "route")
+    completed = [ev["node"] for kind, ev in events[:first_route] if kind == "node_end"]
+    assert completed == list(order)
+
+
+def test_router_can_read_new_key_from_later_sibling():
+    g = Graph("new-key")
+    g.add_node(Node("left", lambda s: {}))
+    g.add_node(Node("right", lambda s: {"ready": True}))
+    for name in ("left", "right"):
+        g.add_edge(START, name)
+    g.add_router("left", lambda s: "done" if s["ready"] else "wait", {"done": END})
+    events, observer = collect_events()
+    state = run_graph(g, {}, observer=observer)
+    assert state["errors"] == {}
+    assert events[-1][0] == "graph_end"
+
+
+def test_router_observes_later_sibling_error_after_wave_settles():
+    g = Graph("wave-error")
+    g.add_node(Node("left", lambda s: {}))
+    g.add_node(Node("right", lambda s: 1 / 0))
+    for name in ("left", "right"):
+        g.add_edge(START, name)
+    g.add_router("left", lambda s: "failed" if "right" in s["errors"] else "ok",
+                 {"failed": END, "ok": END})
+    events, observer = collect_events()
+    run_graph(g, {}, observer=observer)
+    assert dict(events)["route"]["reason"] == "failed"
+
+
+def test_wave_collision_is_detected_before_any_router_runs():
+    g = Graph("collision-before-route")
+    routed = []
+    for name in ("left", "right"):
+        g.add_node(Node(name, lambda s: {"same": 1}))
+        g.add_edge(START, name)
+    g.add_router("left", lambda s: routed.append(True) or "done", {"done": END})
+    with pytest.raises(GraphStateCollision):
+        run_graph(g, {})
+    assert routed == []

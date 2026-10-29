@@ -100,11 +100,13 @@ class Session:
         if tool_calls:
             summary = "; ".join(f"{c['tool']}({c['args']}) -> {c['output']}" for c in tool_calls)
             record = f"{reply}\n[tools used: {summary}]"
-        self.history.append({"role": "user", "content": user_message})
-        self.history.append({"role": "assistant", "content": record})
+        # Do not expose a failed write as a completed exchange in the next
+        # prompt. This ordering does not roll back tools or the memory backend.
         if self.memory is not None:
             self.memory.log_chat(user_message, record, session_id=self.session_id,
                                  source=source, meta=meta)
+        self.history.append({"role": "user", "content": user_message})
+        self.history.append({"role": "assistant", "content": record})
 
     # ---- session lifecycle (the "New chat" / history feature)
     # A session is just a tag on chat_log rows. Starting a new one clears working
@@ -115,14 +117,15 @@ class Session:
         self.history = []
 
     def switch(self, session_id: str) -> None:
+        # Load and assemble before publishing either part of the active state.
+        # A failed read must not redirect subsequent turns to another thread.
+        history = []
+        if self.memory is not None and self.settings.history_turns > 0:
+            # only the recent tail of a past conversation goes back into working
+            # memory (respond() also windows it, but don't hold the whole thread)
+            turns = self.settings.history_turns
+            for user_msg, reply in list(self.memory.session_history(session_id))[-turns:]:
+                history.append({"role": "user", "content": user_msg})
+                history.append({"role": "assistant", "content": reply})
         self.session_id = session_id
-        self.history = []
-        if self.memory is None:
-            return
-        # only the recent tail of a past conversation goes back into working
-        # memory (respond() also windows it, but don't hold the whole thread)
-        turns = self.settings.history_turns
-        for user_msg, reply in list(self.memory.session_history(session_id))[-turns:]:
-            self.history.append({"role": "user", "content": user_msg})
-            self.history.append({"role": "assistant", "content": reply})
-
+        self.history = history

@@ -2,6 +2,17 @@
 
 All notable changes to Weasley Assistant are documented here.
 
+## Unreleased
+
+- Avoid replaying the full tool loop when triage graph execution fails after
+  the loop starts. Preserve its original exception or completed result;
+  failures before the full turn still fall back normally.
+- Cancel pending local MCP requests after a tool timeout and report that remote
+  completion remains unknown, rather than leaving requests active silently.
+- Validate retrieval-gate decision, query and reason types before memory lookup.
+  Malformed fields and blank positive queries fail open using the original
+  message; omitted-field defaults and valid skip decisions remain unchanged.
+
 ## [0.2.0] - 2026-08-02
 
 ### Fixed
