@@ -26,12 +26,13 @@ class SqliteFactStore:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
 
-    def add(self, subject: str, content: str, source: str = "user") -> None:
+    def add(self, subject: str, content: str, source: str = "user", *, commit: bool = True) -> None:
         self.conn.execute(
             "INSERT INTO facts (subject, content, source) VALUES (?,?,?)",
             (subject.lower().strip(), content, source),
         )
-        self.conn.commit()
+        if commit:
+            self.conn.commit()
 
     def search(self, query: str, top_k: int = 4) -> list[str]:
         fts = _fts_query(query)
