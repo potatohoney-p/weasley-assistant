@@ -11,8 +11,9 @@ message; today's calendar loads from disk), then a code router picks the path:
 
 "thanks!" never wakes the big model. "schedule a swim Saturday" runs the exact
 same loop as always — as one node. The user never chooses a mode; this graph
-IS the choice. And every seam fails open: a broken classifier, a broken
-engine, anything → the plain loop answers, same as if the flag were off.
+IS the choice. Triage failures fall open to the plain loop, but a full turn
+is attempted at most once per request. If tools ran before the loop failed,
+the original failure propagates rather than replaying their side effects.
 """
 
 from __future__ import annotations

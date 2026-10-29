@@ -48,6 +48,11 @@ def _observer(kind: str, event: dict) -> None:
         console.print(f"  [dim]tool · {event['tool']}({event['args']}) → {event['output'][:80]}[/dim]")
     elif kind == "gate":
         console.print(f"  [dim]gate · {event['decision']} — {event.get('reason','')}[/dim]")
+    elif kind == "maintenance_error":
+        console.print(
+            f"  [yellow]memory · {event['operation']} failed ({event['error_type']}); "
+            "chat saved, reply preserved. Do not repeat the request just to retry maintenance.[/yellow]"
+        )
     elif kind == "consolidation":
         console.print(f"  [dim]memory · consolidated {event['new_facts']} fact(s) from recent chats[/dim]")
 

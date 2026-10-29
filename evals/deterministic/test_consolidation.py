@@ -235,3 +235,47 @@ def test_the_prompt_carries_the_log_and_demands_json_only():
     assert "worth remembering in a month" in filled, (
         "the durability instruction is what keeps chit-chat out of long-term memory"
     )
+
+
+@pytest.mark.parametrize("malformed", [
+    {"facts": None},
+    {"facts": "facts"},
+    {"facts": {}},
+    {"facts": [None]},
+    {"facts": ["fact"]},
+    {"facts": [{"subject": 7, "content": "text"}]},
+    {"facts": [{"subject": "Alex", "content": ["text"]}]},
+    {"facts": [{"subject": "Alex", "content": False}]},
+    {"facts": [], "episode": ["episode"]},
+    {"facts": [], "episode": 42},
+    {"facts": [], "episode": None},
+])
+def test_wrong_shaped_output_leaves_all_memory_untouched(memory, malformed):
+    add_exchanges(memory.conn, 3)
+    assert run(memory, [response([text_block(json.dumps(malformed))])]) == 0
+    assert unconsolidated(memory.conn) == 6
+    assert memory.conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0] == 0
+    assert memory.conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("bad_tail", [
+    {"facts": [{"subject": "Alex", "content": "Valid first fact"}, None]},
+    {"facts": [{"subject": "Alex", "content": "Valid first fact"}], "episode": {}},
+])
+def test_validate_entire_batch_before_any_write_and_retry_once(memory, bad_tail):
+    add_exchanges(memory.conn, 3)
+    assert run(memory, [response([text_block(json.dumps(bad_tail))])]) == 0
+    assert unconsolidated(memory.conn) == 6
+    assert memory.conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0] == 0
+    assert run(memory, [response([text_block(DISTILLED)])]) == 2
+    assert memory.conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0] == 2
+    assert memory.conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0] == 1
+    assert unconsolidated(memory.conn) == 0
+
+
+def test_return_count_measures_written_facts_not_incomplete_candidates(memory):
+    add_exchanges(memory.conn, 3)
+    payload = {"facts": [{"subject": "Alex"}, {"content": "missing subject"},
+                         {"subject": "Raj", "content": "Plays tennis"}]}
+    assert run(memory, [response([text_block(json.dumps(payload))])]) == 1
+    assert unconsolidated(memory.conn) == 0

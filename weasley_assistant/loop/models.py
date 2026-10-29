@@ -278,34 +278,51 @@ class _OpenAIStream:
         self._text: list[str] = []
         self._tools: dict[int, dict] = {}   # index → {id, name, args}
         self._usage = None
+        self._response_stream = None
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
+        self._close()
         return False
+
+    def _close(self):
+        # The text iterator can remain suspended when a consumer stops early.
+        # Release its HTTP response on context exit, without waiting for GC.
+        stream, self._response_stream = self._response_stream, None
+        if stream is not None:
+            stream.close()
 
     @property
     def text_stream(self):
-        stream = self._client._call(
+        self._response_stream = stream = self._client._call(
             self._kwargs, stream=True, stream_options={"include_usage": True})
-        for chunk in stream:
-            if getattr(chunk, "usage", None):
-                self._usage = chunk.usage
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            if getattr(delta, "content", None):
-                self._text.append(delta.content)
-                yield delta.content
-            for tc in (getattr(delta, "tool_calls", None) or []):
-                slot = self._tools.setdefault(tc.index, {"id": None, "name": "", "args": ""})
-                if tc.id:
-                    slot["id"] = tc.id
-                if tc.function and tc.function.name:
-                    slot["name"] = tc.function.name
-                if tc.function and tc.function.arguments:
-                    slot["args"] += tc.function.arguments
+        try:
+            for chunk in stream:
+                if getattr(chunk, "usage", None):
+                    self._usage = chunk.usage
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if getattr(delta, "content", None):
+                    self._text.append(delta.content)
+                    yield delta.content
+                for tc in (getattr(delta, "tool_calls", None) or []):
+                    slot = self._tools.setdefault(tc.index, {"id": None, "name": "", "args": ""})
+                    if tc.id:
+                        slot["id"] = tc.id
+                    if tc.function and tc.function.name:
+                        slot["name"] = tc.function.name
+                    if tc.function and tc.function.arguments:
+                        slot["args"] += tc.function.arguments
+                    # Metadata may arrive before or after the argument deltas;
+                    # keep it with its tool call, just as _create does.
+                    extra = getattr(tc, "extra_content", None)
+                    if extra is not None:
+                        slot["extra"] = extra
+        finally:
+            self._close()
 
     def get_final_message(self):
         blocks = []
@@ -315,7 +332,7 @@ class _OpenAIStream:
         for slot in self._tools.values():
             blocks.append(SimpleNamespace(
                 type="tool_use", id=slot["id"], name=slot["name"],
-                input=json.loads(slot["args"] or "{}")))
+                input=json.loads(slot["args"] or "{}"), extra=slot.get("extra")))
         usage = self._usage
         return SimpleNamespace(
             stop_reason="tool_use" if self._tools else "end_turn",

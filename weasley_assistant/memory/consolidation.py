@@ -61,15 +61,31 @@ def consolidate_if_due(
     except Exception:
         return 0  # never lose the log — it stays unconsolidated for next time
 
-    for fact in distilled.get("facts", []):
-        if fact.get("subject") and fact.get("content"):
-            facts.add(fact["subject"], fact["content"], source="consolidation")
-    if distilled.get("episode"):
-        episodes.add(distilled["episode"], happened_at=date.today().isoformat())
+    # Validate the entire response before calling a store: adapters can commit
+    # each add independently, so discovering a malformed later item after an
+    # earlier write would duplicate that fact when the pending log is retried.
+    candidates = distilled.get("facts", [])
+    episode = distilled.get("episode", "")
+    if not isinstance(candidates, list) or not isinstance(episode, str):
+        return 0
+    accepted = []
+    for fact in candidates:
+        if not isinstance(fact, dict):
+            return 0
+        subject, content = fact.get("subject", ""), fact.get("content", "")
+        if not isinstance(subject, str) or not isinstance(content, str):
+            return 0
+        if subject and content:
+            accepted.append((subject, content))
+
+    for subject, content in accepted:
+        facts.add(subject, content, source="consolidation")
+    if episode:
+        episodes.add(episode, happened_at=date.today().isoformat())
 
     conn.execute(
         f"UPDATE chat_log SET consolidated = 1 WHERE id IN ({','.join('?' * len(rows))})",
         [r["id"] for r in rows],
     )
     conn.commit()
-    return len(distilled.get("facts", []))
+    return len(accepted)

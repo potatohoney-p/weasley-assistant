@@ -80,3 +80,21 @@ graph workflows: a graph's `agent_node` is the same loop invoked as one step —
 peer-to-peer agent messaging, execution follows the edges deterministically.) It's
 the readable blueprint — OpenClaw and Hermes are the products; this is the afternoon
 read that explains them.
+
+## Post-commit memory maintenance
+
+A successful turn first persists its chat exchange. Consolidation and the generated
+`MEMORY.md` mirror run afterward, independently. Ordinary exceptions from either
+maintenance operation emit a `maintenance_error` event and do not discard the reply
+or rerun its tools. The event identifies the operation and exception type (not the
+potentially sensitive exception message), with `chat_persisted: true`. The CLI shows
+a warning; JSONL traces retain the diagnostic and the successful `turn_end`.
+Other gateways can handle the event through the existing observer interface.
+
+This is not a transaction across tools, chat, consolidation and files. A maintenance
+backend may have partially changed state before raising, and `MEMORY.md` may be stale
+or partially written. No immediate retry or rollback is attempted. Diagnose the
+storage/backend before the next ordinary turn attempts maintenance again; do not
+repeat an action merely to refresh memory. The reply confirms the turn's result,
+not successful consolidation/export. Required chat persistence errors still fail
+the request; observer/tracer failures and process-control exceptions still propagate.
