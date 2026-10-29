@@ -17,12 +17,13 @@ class SqliteEpisodeStore:
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
 
-    def add(self, summary: str, happened_at: str) -> None:
+    def add(self, summary: str, happened_at: str, *, commit: bool = True) -> None:
         self.conn.execute(
             "INSERT INTO episodes (happened_at, summary) VALUES (?,?)",
             (happened_at, summary),
         )
-        self.conn.commit()
+        if commit:
+            self.conn.commit()
 
     def search(self, query: str, top_k: int = 3) -> list[str]:
         """Relevance first (FTS), most recent first among matches."""

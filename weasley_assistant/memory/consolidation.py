@@ -78,14 +78,35 @@ def consolidate_if_due(
         if subject and content:
             accepted.append((subject, content))
 
-    for subject, content in accepted:
-        facts.add(subject, content, source="consolidation")
-    if episode:
-        episodes.add(episode, happened_at=date.today().isoformat())
+    # Only the built-in stores sharing this connection can join one transaction.
+    # Remote/mixed/custom adapters may commit independently; do not claim atomicity
+    # or pass new keyword arguments to those interfaces.
+    local = (type(facts) is SqliteFactStore and type(episodes) is SqliteEpisodeStore
+             and facts.conn is conn and episodes.conn is conn)
+    if local and conn.in_transaction:
+        return 0  # leave a caller-owned transaction and its pending log untouched
 
-    conn.execute(
-        f"UPDATE chat_log SET consolidated = 1 WHERE id IN ({','.join('?' * len(rows))})",
-        [r["id"] for r in rows],
-    )
-    conn.commit()
+    def write_batch():
+        options = {"commit": False} if local else {}
+        for subject, content in accepted:
+            facts.add(subject, content, source="consolidation", **options)
+        if episode:
+            episodes.add(episode, happened_at=date.today().isoformat(), **options)
+        conn.execute(
+            f"UPDATE chat_log SET consolidated = 1 WHERE id IN ({','.join('?' * len(rows))})",
+            [r["id"] for r in rows],
+        )
+
+    if local:
+        # Acquire the writer lock only after the model call. A failed fact,
+        # episode, FTS trigger, or completion update rolls back the whole batch.
+        try:
+            with conn:
+                conn.execute("BEGIN IMMEDIATE")
+                write_batch()
+        except Exception:
+            return 0  # the original log remains retryable, with no partial memories
+    else:
+        write_batch()
+        conn.commit()
     return len(accepted)
