@@ -55,7 +55,9 @@ def run_loop(
 
     stream=True emits the assistant's text as it's generated (notify("text",
     {"delta": ...})) so a gateway can show it appear token by token — used by
-    the dashboard. Falls back to a single call for clients without streaming."""
+    the dashboard. Falls back to a single call for clients without streaming
+    or failures before output. After publication starts (or a final response
+    exists), errors propagate rather than silently requesting a second reply."""
     notify = observer or (lambda kind, ev: None)
     result = LoopResult(reply="")
     can_stream = stream and hasattr(client.messages, "stream")
@@ -66,16 +68,21 @@ def run_loop(
         # ---- reason: one LLM call with the current working memory
         response = None
         if can_stream:
+            publication_started = False
             try:
                 with client.messages.stream(
                     model=model, system=system, messages=messages,
                     tools=tools.schemas(), max_tokens=max_tokens,
                 ) as s:
                     for delta in s.text_stream:
+                        # Mark before calling the observer: it may publish then fail.
+                        publication_started = True
                         notify("text", {"delta": delta})
                     response = s.get_final_message()
             except Exception:
-                response = None  # any streaming hiccup → fall back to one call
+                if publication_started or response is not None:
+                    raise
+                response = None  # only pre-output failures may use the fallback
         if response is None:
             response = client.messages.create(
                 model=model,
