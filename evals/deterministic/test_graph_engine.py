@@ -259,3 +259,35 @@ def test_wave_collision_is_detected_before_any_router_runs():
     with pytest.raises(GraphStateCollision):
         run_graph(g, {})
     assert routed == []
+
+
+@pytest.mark.parametrize("order", [("left", "right"), ("right", "left")])
+@pytest.mark.parametrize("prior_wave", [False, True])
+def test_colliding_wave_does_not_publish_partial_state(order, prior_wave):
+    g = Graph("collision-state")
+    state = {"same": "original", "errors": {"earlier": "preserved"}}
+    expected = dict(state)
+    if prior_wave:
+        g.add_node(Node("prepare", lambda s: {"prepared": True}))
+        g.add_edge(START, "prepare")
+        expected["prepared"] = True
+    for name in order:
+        # Each node has a unique write before the shared key: neither may leak.
+        g.add_node(Node(name, lambda s, n=name: {n: "new", "same": n}))
+        g.add_edge("prepare" if prior_wave else START, name)
+    events, observer = collect_events()
+    with pytest.raises(GraphStateCollision):
+        run_graph(g, state, observer=observer)
+    assert state == expected
+    # No successful node-end receipt for outputs rejected by the wave merge.
+    assert [ev["node"] for kind, ev in events if kind == "node_end"] == (
+        ["prepare"] if prior_wave else []
+    )
+
+
+def test_disjoint_wave_still_ignores_shared_private_keys():
+    g = Graph("private-keys")
+    for name in ("left", "right"):
+        g.add_node(Node(name, lambda s, n=name: {"_private": n, n: True}))
+        g.add_edge(START, name)
+    assert run_graph(g, {}) == {"errors": {}, "left": True, "right": True}

@@ -173,8 +173,9 @@ def run_graph(graph: Graph, state: dict, observer: Observer | None = None,
 
         jumps: list[str] = []
         wave_writes: dict[str, str] = {}
-        for name, out, error, ms in results:  # merge in wave order — deterministic
-            path.append(name)
+        # Reject the whole wave before publishing any output. Otherwise a
+        # collision leaves a prefix of sibling writes in the caller's state.
+        for name, out, _error, _ms in results:
             keys = [k for k in (out or {}) if not k.startswith("_")]
             for key in keys:
                 if wave_writes.get(key, name) != name:
@@ -182,6 +183,11 @@ def run_graph(graph: Graph, state: dict, observer: Observer | None = None,
                         f"'{name}' and '{wave_writes[key]}' both wrote '{key}' — "
                         f"parallel branches must write disjoint keys")
                 wave_writes[key] = name
+
+        for name, out, error, ms in results:  # merge in wave order — deterministic
+            path.append(name)
+            keys = [k for k in (out or {}) if not k.startswith("_")]
+            for key in keys:
                 state[key] = out[key]
             notify("node_end", {"workflow": graph.name, "node": name,
                                 "ms": ms, "keys": keys, "error": error})
