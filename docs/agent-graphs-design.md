@@ -80,7 +80,10 @@ def run_graph(graph: Graph, state: dict,
   returns a dict of keys to merge. No typed channels, no reducers — a newcomer can
   print(state) at any point and understand the run. Parallel branches write **disjoint
   keys** (enforced: merging a key another live branch already wrote raises — collisions
-  are a graph bug, not a race to silently lose).
+  are a graph bug, not a race to silently lose). The engine checks the whole
+  wave for collisions before merging any returned output or emitting node-end
+  receipts. A rejected wave preserves earlier waves and preexisting state;
+  it does not undo node side effects or mutations of nested input objects.
 - **Execution**: ready-queue over the DAG. A node is ready when all its in-edges have
   fired. Ready nodes run **concurrently on a ThreadPoolExecutor** (stdlib; the whole
   codebase is sync — asyncio would force a rewrite of tools and models for zero gain).
