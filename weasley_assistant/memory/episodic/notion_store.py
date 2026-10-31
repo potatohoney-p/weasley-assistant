@@ -139,10 +139,18 @@ class NotionEpisodeStore:
         results: list[dict] = []
         response = self.client.data_sources.query(data_source_id=self.data_source_id)
         results.extend(response.get("results", []))
+        seen_cursors: set[str] = set()
         while response.get("has_more"):
+            cursor = response.get("next_cursor")
+            # Fail rather than restart/repeat a page forever or return a
+            # silently incomplete memory snapshot. Cursors are opaque: validate
+            # nonblank text, but pass the original value through unchanged.
+            if not isinstance(cursor, str) or not cursor.strip() or cursor in seen_cursors:
+                raise ValueError("Notion pagination cursor is missing, invalid, or repeated")
+            seen_cursors.add(cursor)
             response = self.client.data_sources.query(
                 data_source_id=self.data_source_id,
-                start_cursor=response.get("next_cursor"),
+                start_cursor=cursor,
             )
             results.extend(response.get("results", []))
         return results
