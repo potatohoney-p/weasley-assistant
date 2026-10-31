@@ -85,21 +85,22 @@ class NotionEpisodeStore:
 
     def search(self, query: str, top_k: int = 3) -> list[str]:
         """Keyword search over episode summaries; falls back to recent if query is empty."""
-        keywords = re.findall(r"[a-zA-Z0-9]{2,}", query.lower())
+        # Use the SQLite query tokenizer's Unicode alphanumeric runs. ASCII-only
+        # tokenization turns Korean/Japanese queries into unrelated recent
+        # episodes and drops the non-ASCII terms of mixed-language queries.
+        keywords = set(re.findall(r"[^\W_]{2,}", query.lower()))
         if not keywords:
             return self.recent(top_k)
 
-        # Deduplicate while preserving order.
-        keywords = list(dict.fromkeys(keywords))
         matches = []
         for page in self._query_all():
             summary_lower = self._extract_rich_text(
                 page.get("properties", {}).get("Summary", {})
             ).lower()
-            if any(
-                re.search(rf"\b{re.escape(keyword)}\b", summary_lower)
-                for keyword in keywords
-            ):
+            # Use the same boundaries on both sides; underscores are token
+            # separators, not part of a word. Preserve whole-token OR matching.
+            summary_words = set(re.findall(r"[^\W_]{2,}", summary_lower))
+            if keywords & summary_words:
                 matches.append(page)
 
         matches.sort(

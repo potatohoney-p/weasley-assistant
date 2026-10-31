@@ -4,6 +4,10 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Preserve Unicode search terms in Notion episodic memory instead of treating
+  non-ASCII queries as empty and returning unrelated recent episodes. Match
+  whole alphanumeric tokens, with underscores acting as separators.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.

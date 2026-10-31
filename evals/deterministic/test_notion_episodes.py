@@ -192,3 +192,39 @@ print("ok")
 """
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("query,summary", [
+    ("서울", "서울 회의 준비"),
+    ("東京", "東京 会議"),
+    ("МОСКВА", "Москва встреча"),
+    ("CAFÉ", "café meeting"),
+    ("ΑΘΉΝΑ", "Αθήνα meeting"),
+    ("서울_demo", "서울 planning"),
+    ("demo", "demo_planning"),
+])
+def test_search_preserves_unicode_tokens_and_underscore_separators(store, query, summary):
+    store.add(summary, "2026-07-08")
+    store.add("unrelated latest episode", "2026-07-10")
+    assert store.search(query, top_k=1) == [f"(2026-07-08) {summary}"]
+
+
+def test_unicode_query_with_no_match_does_not_return_recent(store):
+    store.add("unrelated latest episode", "2026-07-10")
+    assert store.search("서울") == []
+
+
+def test_unicode_tokens_match_whole_runs_only(store):
+    store.add("서울역 arrival", "2026-07-10")
+    store.add("서울 arrival", "2026-07-09")
+    store.add("cafeteria meeting", "2026-07-08")
+    assert store.search("서울 café", top_k=10) == ["(2026-07-09) 서울 arrival"]
+
+
+def test_unicode_and_ascii_terms_keep_or_ordering_and_limit(store):
+    store.add("서울 meeting", "2026-07-08")
+    store.add("demo planning", "2026-07-09")
+    store.add("unrelated latest episode", "2026-07-10")
+    assert store.search("서울 demo 서울", top_k=2) == [
+        "(2026-07-09) demo planning", "(2026-07-08) 서울 meeting",
+    ]
