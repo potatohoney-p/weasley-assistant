@@ -4,6 +4,10 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Restore bounded conversation context when the browser agent resumes or rebuilds.
+  Publish the new agent only after history loads; failed restoration preserves
+  the current agent and selected conversation.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.
