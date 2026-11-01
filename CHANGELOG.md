@@ -4,6 +4,14 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+### Direct memory edit durability
+- Failed direct SQLite fact/episode writes now discard their own edit instead of
+  leaving it pending for a later commit. Caller-owned pending work is preserved
+  on recoverable failures; successful calls keep the existing auto-commit behavior.
+- Real SQLite lock, deferred-constraint and rollback-trigger regressions cover
+  memory rows, FTS consistency and successful retries. Remote adapters unchanged.
+
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.

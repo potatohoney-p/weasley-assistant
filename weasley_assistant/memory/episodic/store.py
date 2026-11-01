@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from weasley_assistant.db import memory_write
 from weasley_assistant.memory.semantic.store import _fts_query
 
 
@@ -18,11 +19,11 @@ class SqliteEpisodeStore:
         self.conn = conn
 
     def add(self, summary: str, happened_at: str) -> None:
-        self.conn.execute(
-            "INSERT INTO episodes (happened_at, summary) VALUES (?,?)",
-            (happened_at, summary),
-        )
-        self.conn.commit()
+        with memory_write(self.conn):
+            self.conn.execute(
+                "INSERT INTO episodes (happened_at, summary) VALUES (?,?)",
+                (happened_at, summary),
+            )
 
     def search(self, query: str, top_k: int = 3) -> list[str]:
         """Relevance first (FTS), most recent first among matches."""
@@ -52,6 +53,6 @@ class SqliteEpisodeStore:
         return [dict(r) for r in rows]
 
     def delete(self, episode_id: int) -> bool:
-        cur = self.conn.execute("DELETE FROM episodes WHERE id=?", (episode_id,))
-        self.conn.commit()
+        with memory_write(self.conn):
+            cur = self.conn.execute("DELETE FROM episodes WHERE id=?", (episode_id,))
         return cur.rowcount > 0
