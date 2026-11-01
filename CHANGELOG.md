@@ -4,6 +4,9 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Roll back failed chat exchanges when SQLite rejects the final commit, including
+  reader locks and deferred constraints, without discarding prior caller work.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.

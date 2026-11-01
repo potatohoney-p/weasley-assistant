@@ -94,3 +94,60 @@ def test_first_insert_failure_cleans_up_savepoint(memory):
     assert memory.conn.execute("SELECT COUNT(*) FROM chat_log").fetchone()[0] == 0
     memory.log_chat("retry", "success")
     assert memory.session_history("default") == [("retry", "success")]
+
+
+@pytest.mark.parametrize("pending", [False, True])
+@pytest.mark.parametrize("autocommit", [False, True])
+def test_commit_busy_removes_failed_exchange_before_retry(memory, pending, autocommit):
+    conn = memory.conn
+    if autocommit:
+        conn.isolation_level = None
+    conn.execute("PRAGMA busy_timeout=1")
+    conn.execute("CREATE TABLE unrelated (value TEXT)")
+    conn.commit()
+    if pending:
+        conn.execute("BEGIN")
+        conn.execute("INSERT INTO unrelated VALUES ('preserve')")
+    path = conn.execute("PRAGMA database_list").fetchone()[2]
+    reader = sqlite3.connect(path)
+    try:
+        reader.execute("BEGIN")
+        reader.execute("SELECT * FROM chat_log").fetchall()
+        # A reader allows both INSERTs but prevents the final durable commit.
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            memory.log_chat("failed", "answer")
+        assert memory.session_history("default") == []
+        assert conn.in_transaction is pending
+        assert conn.execute("SELECT COUNT(*) FROM unrelated").fetchone()[0] == int(pending)
+    finally:
+        reader.rollback()
+        reader.close()
+    memory.log_chat("retry", "success")
+    assert memory.session_history("default") == [("retry", "success")]
+    with sqlite3.connect(path) as observer:
+        assert observer.execute("SELECT COUNT(*) FROM chat_log").fetchone()[0] == 2
+
+
+@pytest.mark.parametrize("pending", [False, True])
+def test_deferred_constraint_commit_failure_preserves_prior_work(memory, pending):
+    conn = memory.conn
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.executescript("""
+        CREATE TABLE parent (id INTEGER PRIMARY KEY);
+        CREATE TABLE child (parent_id INTEGER REFERENCES parent(id)
+                            DEFERRABLE INITIALLY DEFERRED);
+        CREATE TABLE unrelated (value TEXT);
+        CREATE TRIGGER deferred_failure AFTER INSERT ON chat_log
+        WHEN NEW.content = 'failed'
+        BEGIN INSERT INTO child VALUES (99); END;
+    """)
+    if pending:
+        conn.execute("INSERT INTO unrelated VALUES ('preserve')")
+    with pytest.raises(sqlite3.IntegrityError, match="FOREIGN KEY"):
+        memory.log_chat("failed", "answer")
+    assert memory.session_history("default") == []
+    assert conn.execute("SELECT COUNT(*) FROM child").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM unrelated").fetchone()[0] == int(pending)
+    assert conn.in_transaction is pending
+    memory.log_chat("retry", "success")
+    assert memory.session_history("default") == [("retry", "success")]
