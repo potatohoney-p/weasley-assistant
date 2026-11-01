@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 import sqlite3
 
+from weasley_assistant.db import memory_write
+
 
 def _fts_query(text: str) -> str:
     """User text isn't a valid FTS5 query (quotes/punctuation break MATCH).
@@ -27,11 +29,11 @@ class SqliteFactStore:
         self.conn = conn
 
     def add(self, subject: str, content: str, source: str = "user") -> None:
-        self.conn.execute(
-            "INSERT INTO facts (subject, content, source) VALUES (?,?,?)",
-            (subject.lower().strip(), content, source),
-        )
-        self.conn.commit()
+        with memory_write(self.conn):
+            self.conn.execute(
+                "INSERT INTO facts (subject, content, source) VALUES (?,?,?)",
+                (subject.lower().strip(), content, source),
+            )
 
     def search(self, query: str, top_k: int = 4) -> list[str]:
         fts = _fts_query(query)
@@ -65,17 +67,17 @@ class SqliteFactStore:
         return [dict(r) for r in rows]
 
     def update(self, fact_id: int, content: str, subject: str | None = None) -> bool:
-        if subject is None:
-            cur = self.conn.execute("UPDATE facts SET content=? WHERE id=?", (content, fact_id))
-        else:
-            cur = self.conn.execute(
-                "UPDATE facts SET content=?, subject=? WHERE id=?",
-                (content, subject.lower().strip(), fact_id),
-            )
-        self.conn.commit()
+        with memory_write(self.conn):
+            if subject is None:
+                cur = self.conn.execute("UPDATE facts SET content=? WHERE id=?", (content, fact_id))
+            else:
+                cur = self.conn.execute(
+                    "UPDATE facts SET content=?, subject=? WHERE id=?",
+                    (content, subject.lower().strip(), fact_id),
+                )
         return cur.rowcount > 0
 
     def delete(self, fact_id: int) -> bool:
-        cur = self.conn.execute("DELETE FROM facts WHERE id=?", (fact_id,))
-        self.conn.commit()
+        with memory_write(self.conn):
+            cur = self.conn.execute("DELETE FROM facts WHERE id=?", (fact_id,))
         return cur.rowcount > 0

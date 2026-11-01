@@ -7,6 +7,7 @@ Open it yourself anytime:  sqlite3 ~/.weasley/assistant/state.db '.tables'
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 SCHEMA = """
@@ -105,3 +106,34 @@ def connect(home: Path, check_same_thread: bool = True) -> sqlite3.Connection:
     conn.executescript(SCHEMA)
     _migrate(conn)
     return conn
+
+
+@contextmanager
+def memory_write(conn: sqlite3.Connection):
+    """Commit one direct memory edit, discarding it if durability fails.
+
+    Preserve caller-owned pending work unless SQLite rolls back the whole
+    transaction itself. Success retains the stores'
+    historical auto-commit behavior, including the caller's transaction.
+    """
+    had_transaction = conn.in_transaction
+    conn.execute("SAVEPOINT direct_memory_edit")
+    try:
+        yield
+        if had_transaction:
+            # Python 3.12 autocommit=True makes Connection.commit() a no-op,
+            # even when a caller explicitly opened a SQL transaction.
+            if getattr(conn, "autocommit", None) is True:
+                conn.execute("COMMIT")
+            else:
+                conn.commit()
+        else:
+            conn.execute("RELEASE SAVEPOINT direct_memory_edit")
+    except BaseException:
+        if conn.in_transaction:
+            if had_transaction:
+                conn.execute("ROLLBACK TO SAVEPOINT direct_memory_edit")
+                conn.execute("RELEASE SAVEPOINT direct_memory_edit")
+            else:
+                conn.execute("ROLLBACK")
+        raise
