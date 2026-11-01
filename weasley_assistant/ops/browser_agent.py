@@ -79,20 +79,39 @@ def resume_or_new_session(conn) -> str:
     return datetime.now().strftime("dashboard-%Y%m%d-%H%M%S")
 
 
+def _build_agent(session_id: str | None = None):
+    """Restore a complete working conversation before publishing an agent."""
+    from contextlib import suppress
+
+    from weasley_assistant.app import WeasleyAssistant
+
+    settings = load_settings()
+    settings.ensure_home()
+    conn = connect(settings.home, check_same_thread=False)
+    fresh = None
+    try:
+        fresh = WeasleyAssistant(settings=settings, conn=conn)
+        # Restoring only the id makes the UI look resumed while the model sees
+        # an empty conversation. switch() applies the configured history window.
+        fresh.session.switch(session_id if session_id is not None else resume_or_new_session(conn))
+        return fresh
+    except (Exception, SystemExit):
+        # A failed history read must not publish a half-restored singleton or
+        # leak the candidate's resources. Preserve the original failure.
+        if fresh is not None:
+            with suppress(Exception):
+                fresh.close()
+        with suppress(Exception):
+            conn.close()
+        raise
+
+
 def get_agent():
     global _agent, _dashboard_session
     if _agent is None:
-        from weasley_assistant.app import WeasleyAssistant
-
-        settings = load_settings()
-        settings.ensure_home()
-        conn = connect(settings.home, check_same_thread=False)
-        _agent = WeasleyAssistant(settings=settings, conn=conn)
-        # A dashboard run resumes its last recent thread (so a restart/refresh
-        # keeps the chat on screen), or starts fresh if that thread is idle.
-        # Same id collect() reports, so the dock restores the right conversation.
-        _dashboard_session = resume_or_new_session(conn)
-        _agent.session.session_id = _dashboard_session
+        fresh = _build_agent()
+        _dashboard_session = fresh.session.session_id
+        _agent = fresh
     return _agent
 
 
@@ -137,20 +156,8 @@ def rebuild() -> str | None:
     with agent_lock:
         old = _agent
         try:
-            from weasley_assistant.app import WeasleyAssistant
-
-            settings = load_settings()
-            settings.ensure_home()
-            conn = connect(settings.home, check_same_thread=False)
-            fresh = WeasleyAssistant(settings=settings, conn=conn)
-            # Carry the CONVERSATION across the swap. A settings change swaps the
-            # brain, not the thread — but a brand-new WeasleyAssistant starts on the eternal
-            # 'default' session, so without this line switching provider silently
-            # dumped you into a different chat and your history vanished from the
-            # dock. Same resolution get_agent() uses, so both doors agree.
-            fresh.session.session_id = (
-                old.session.session_id if old is not None else resume_or_new_session(conn)
-            )
+            # A model change swaps the brain, not the selected conversation.
+            fresh = _build_agent(old.session.session_id if old is not None else None)
             _dashboard_session = fresh.session.session_id
             _agent = fresh
         except (Exception, SystemExit) as exc:   # get_client raises SystemExit
