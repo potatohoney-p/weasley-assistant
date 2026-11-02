@@ -4,6 +4,10 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Publish procedural-memory refreshes only after every skill file loads, and
+  retain pre-read timestamps so edits during loading are retried on the next
+  match rather than cached indefinitely as current instructions.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.

@@ -64,15 +64,19 @@ class SkillLoader:
         return tuple(sig)
 
     def refresh(self) -> None:
-        self.skills = []
-        for d in self.dirs:
-            if not d.is_dir():
-                continue
-            for f in sorted(d.rglob("SKILL.md")):
-                skill = _parse(f)
-                if skill:
-                    self.skills.append(skill)
-        self._sig = self._scan_sig()
+        # Capture before reading. A later scan could stamp changed files as
+        # current even though we just read their old contents. If a file changes
+        # during loading, the next match sees the changed signature and retries.
+        signature = self._scan_sig()
+        skills = []
+        for filename, _mtime in signature:
+            skill = _parse(Path(filename))
+            if skill:
+                skills.append(skill)
+        # Publish only a complete candidate; a failed read must leave both the
+        # previous instructions and their invalidation signature unchanged.
+        self.skills = skills
+        self._sig = signature
 
     def match(self, message: str, max_skills: int = 2) -> list[Skill]:
         """Transparent trigger: keyword overlap between the message and each
