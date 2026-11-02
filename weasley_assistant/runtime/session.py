@@ -107,6 +107,14 @@ class Session:
                                  source=source, meta=meta)
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": record})
+        # Long-lived gateways must bound the cache as well as the prompt.
+        # Persist first, so a failed write cannot evict a completed exchange.
+        # Mutate in place to preserve references held by gateway callers.
+        window = max(0, self.settings.history_turns) * 2
+        if window:
+            del self.history[:-window]
+        else:
+            self.history.clear()
 
     # ---- session lifecycle (the "New chat" / history feature)
     # A session is just a tag on chat_log rows. Starting a new one clears working

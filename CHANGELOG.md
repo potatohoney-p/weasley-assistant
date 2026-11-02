@@ -4,6 +4,9 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Bound live session working history to the configured turn window after each
+  successful exchange, while retaining the complete durable chat log.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.
