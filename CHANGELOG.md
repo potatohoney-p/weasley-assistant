@@ -4,6 +4,9 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Rotate long-lived gateway traces at turn boundaries after the local date changes,
+  preserving complete turns and validating each newly selected file as UTF-8.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.

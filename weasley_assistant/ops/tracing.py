@@ -3,7 +3,7 @@
 Two outputs from the same events:
 
 1. JSONL, always on: every turn appends readable lines to
-   ~/.weasley/assistant/traces/<date>.jsonl. A trace is just "what happened, in order" —
+   ~/.weasley/assistant/traces/<turn-start-date>.jsonl. A trace is just "what happened, in order" —
    open the file and read your agent's mind. Zero dependencies.
 
 2. OpenTelemetry spans, when OTEL_EXPORTER_OTLP_ENDPOINT is set: the same
@@ -137,6 +137,13 @@ class Tracer:
     # ---- one run = one root span + turn_start/turn_end JSONL markers
     @contextmanager
     def turn(self, user_message: str):
+        # Gateways keep one Tracer alive across days. Rotate before the next
+        # turn, not per event: even a turn crossing midnight stays readable as
+        # one start/events/end sequence (end_turn is called after this context).
+        path = self.settings.home / "traces" / f"{datetime.now():%Y-%m-%d}.jsonl"
+        if path != self.path:
+            self.path = path
+            self._trace_encoding_checked = False
         self._write({"type": "turn_start", "user_message": user_message})
         if self._otel_tracer:
             with self._otel_tracer.start_as_current_span(
