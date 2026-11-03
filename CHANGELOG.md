@@ -4,6 +4,10 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Preserve every local message draft when calls share a timestamp or recipient
+  filename. Exclusive creation chooses an unused suffix without replacing an
+  existing draft, including concurrent gateway calls.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.
