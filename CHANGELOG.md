@@ -4,6 +4,9 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Run the selected delegated Python entry script from its actual nested path.
+  Keep project-root working directories and report the relative script path
+  in execution results, logs and manifests.
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.
