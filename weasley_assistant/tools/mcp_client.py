@@ -12,6 +12,7 @@ import json
 import re
 import threading
 import warnings
+from collections.abc import Callable
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any
@@ -154,12 +155,18 @@ class MCPBridge:
                         name=f"{server}_{meta['name']}",
                         description=f"[MCP:{server}] {meta.get('description', '') or ''}",
                         input_schema=input_schema,
-                        fn=lambda server=server, tool=meta["name"], **kwargs: self.call(
-                            server, tool, kwargs
-                        ),
+                        fn=self._bind_tool(server, meta["name"]),
                     )
                 )
         return tools
+
+    def _bind_tool(self, server: str, tool: str) -> Callable[..., str]:
+        # Route names belong to the discovered tool, not its argument namespace.
+        # A tool may legitimately accept fields named "server" or "tool".
+        def call(**kwargs) -> str:
+            return self.call(server, tool, kwargs)
+
+        return call
 
     async def _supervise(
         self,
