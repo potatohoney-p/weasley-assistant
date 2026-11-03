@@ -101,10 +101,16 @@ def consolidate_if_due(
         # Acquire the writer lock only after the model call. A failed fact,
         # episode, FTS trigger, or completion update rolls back the whole batch.
         try:
-            with conn:
-                conn.execute("BEGIN IMMEDIATE")
-                write_batch()
-        except Exception:
+            conn.execute("BEGIN IMMEDIATE")
+            write_batch()
+            # Native autocommit=True makes Connection's context manager and
+            # commit/rollback methods no-ops, even after an explicit BEGIN.
+            conn.execute("COMMIT")
+        except BaseException as exc:
+            if conn.in_transaction:
+                conn.execute("ROLLBACK")
+            if not isinstance(exc, Exception):
+                raise
             return 0  # the original log remains retryable, with no partial memories
     else:
         write_batch()
