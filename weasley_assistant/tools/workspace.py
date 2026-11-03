@@ -80,27 +80,32 @@ def _pick_entry(files: list[Path]) -> Path | None:
 
 def autorun(folder: Path) -> tuple | None:
     """Run the entry .py in `folder` (headless, captured, timeout). Returns
-    (entry_name, exit_code, output, seconds) — exit_code None means it was still
-    running (likely interactive) and got stopped. None if nothing runnable or
+    (entry_path, exit_code, output, seconds) — entry_path is relative to folder;
+    exit_code None means it was still running (likely interactive) and got
+    stopped. None if nothing runnable or
     auto-run is disabled."""
     if (env_value(AUTORUN_ENV, "1") or "1") in ("0", "false", "no"):
         return None
     entry = _pick_entry(created_files(folder))
     if entry is None:
         return None
+    entry_path = str(entry.relative_to(folder))
     t0 = time.perf_counter()
     try:
-        r = subprocess.run([sys.executable, entry.name], cwd=folder,
+        # Discovery is recursive. Launch that exact file, not a same-named
+        # root file; absolute argv also works with a relative workspace path.
+        # Keep cwd at the workspace root for project-relative data/output.
+        r = subprocess.run([sys.executable, str(entry.absolute())], cwd=folder,
                            stdin=subprocess.DEVNULL, capture_output=True, text=True,
                            timeout=RUN_TIMEOUT, check=False)
         out = (r.stdout + r.stderr).strip()
-        result = (entry.name, r.returncode, out, round(time.perf_counter() - t0, 1))
+        result = (entry_path, r.returncode, out, round(time.perf_counter() - t0, 1))
     except subprocess.TimeoutExpired:
-        result = (entry.name, None,
+        result = (entry_path, None,
                   f"(still running after {RUN_TIMEOUT}s — likely interactive; stopped)",
                   RUN_TIMEOUT)
     except OSError as exc:
-        result = (entry.name, -1, f"couldn't launch: {exc}", 0.0)
+        result = (entry_path, -1, f"couldn't launch: {exc}", 0.0)
     runtime = Path(sys.executable).name
     (folder / "run.log").write_text(
         f"$ {runtime} {result[0]}\nexit: {result[1]}\n\n{result[2]}\n", encoding="utf-8")
