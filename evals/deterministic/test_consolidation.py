@@ -279,3 +279,88 @@ def test_return_count_measures_written_facts_not_incomplete_candidates(memory):
                          {"subject": "Raj", "content": "Plays tennis"}]}
     assert run(memory, [response([text_block(json.dumps(payload))])]) == 1
     assert unconsolidated(memory.conn) == 0
+
+
+@pytest.mark.parametrize('trigger', [
+    ("CREATE TRIGGER reject_fact BEFORE INSERT ON facts WHEN new.subject = 'acme demo' "
+    "BEGIN SELECT RAISE(ABORT, 'fact rejected'); END"),
+    ("CREATE TRIGGER reject_episode BEFORE INSERT ON episodes "
+    "BEGIN SELECT RAISE(ABORT, 'episode rejected'); END"),
+    ("CREATE TRIGGER reject_completion BEFORE UPDATE OF consolidated ON chat_log "
+    "BEGIN SELECT RAISE(ABORT, 'completion rejected'); END"),
+])
+def test_local_failure_rolls_back_entire_batch_and_retry_is_not_duplicated(memory, trigger):
+    add_exchanges(memory.conn, 3)
+    memory.conn.execute(trigger)
+    memory.conn.commit()
+    assert run(memory, [response([text_block(DISTILLED)])]) == 0
+    assert unconsolidated(memory.conn) == 6
+    assert memory.facts.list() == []
+    assert memory.episodes.list() == []
+    assert memory.facts.search('Alex') == []
+    assert memory.episodes.search('demo') == []
+    assert not memory.conn.in_transaction
+    memory.conn.execute(f'DROP TRIGGER {trigger.split()[2]}')
+    memory.conn.commit()
+    assert run(memory, [response([text_block(DISTILLED)])]) == 2
+    assert len(memory.facts.list()) == 2
+    assert len(memory.episodes.list()) == 1
+    assert unconsolidated(memory.conn) == 0
+
+
+def test_local_consolidation_does_not_commit_caller_transaction(memory):
+    add_exchanges(memory.conn, 3)
+    memory.conn.execute("INSERT INTO facts (subject, content) VALUES ('pending', 'caller data')")
+    assert run(memory, [response([text_block(DISTILLED)])]) == 0
+    assert memory.conn.in_transaction
+    assert unconsolidated(memory.conn) == 6
+    assert len(memory.facts.list()) == 1
+    memory.conn.rollback()
+    assert memory.facts.list() == []
+
+
+def test_default_store_add_still_commits_and_opt_out_can_be_rolled_back(memory):
+    memory.facts.add('Alex', 'committed')
+    memory.episodes.add('committed', '2026-10-30')
+    assert not memory.conn.in_transaction
+    memory.facts.add('Raj', 'pending', commit=False)
+    memory.episodes.add('pending', '2026-10-30', commit=False)
+    memory.conn.rollback()
+    assert len(memory.facts.list()) == 1
+    assert len(memory.episodes.list()) == 1
+
+
+def test_custom_adapter_add_interface_receives_no_commit_keyword(memory):
+    add_exchanges(memory.conn, 3)
+
+    class ExternalFacts:
+        def add(self, subject, content, source):
+            memory.facts.add(subject, content, source)
+
+    assert consolidate_if_due(memory.conn, CountingClient([response([text_block(DISTILLED)])]),
+                              'small-model', 3, ExternalFacts(), memory.episodes) == 2
+    assert unconsolidated(memory.conn) == 0
+
+
+def test_commit_failure_rolls_back_memories_and_completion_flags(memory):
+    add_exchanges(memory.conn, 3)
+    memory.conn.execute('PRAGMA foreign_keys=ON')
+    memory.conn.executescript('''
+        CREATE TABLE parent(id INTEGER PRIMARY KEY);
+        CREATE TABLE audit(id INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED);
+        CREATE TRIGGER fail_commit AFTER INSERT ON facts BEGIN
+            INSERT INTO audit VALUES(7);
+        END;
+    ''')
+    assert run(memory, [response([text_block(DISTILLED)])]) == 0
+    assert not memory.conn.in_transaction
+    assert memory.facts.list() == []
+    assert memory.episodes.list() == []
+    assert memory.conn.execute('SELECT COUNT(*) FROM audit').fetchone()[0] == 0
+    assert unconsolidated(memory.conn) == 6
+    memory.conn.execute('DROP TRIGGER fail_commit')
+    memory.conn.commit()
+    assert run(memory, [response([text_block(DISTILLED)])]) == 2
+    assert len(memory.facts.list()) == 2
+    assert len(memory.episodes.list()) == 1
+    assert unconsolidated(memory.conn) == 0
