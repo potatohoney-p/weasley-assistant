@@ -384,28 +384,32 @@ def make_list_tool(conn: sqlite3.Connection, home: Path | None = None) -> Tool:
     def list_events(start: str = "", end: str = "", limit: int = 20) -> str:
         sections: list[str] = []
         checked: list[str] = []
+        failures: list[str] = []
 
         if home is not None:
-            from weasley_assistant.tools.google_calendar import is_connected, list_google_events
+            from weasley_assistant.tools.google_calendar import is_connected, read_google_events
 
             if is_connected(home):
-                checked.append("Google Calendar")
-                g = list_google_events(home, start, end, limit)
-                # A "no events" sentence is not a section; only real rows are.
-                if g and not g.startswith(("No Google", "Google Calendar unavailable")):
-                    sections.append("From Google Calendar:\n" + g)
+                result = read_google_events(home, start, end, limit)
+                if result.error is not None:
+                    failures.append(result.error)
+                else:
+                    checked.append("Google Calendar")
+                    if result.events:
+                        sections.append("From Google Calendar:\n" + "\n".join(result.events))
 
         checked.append("assistant's local calendar")
         local = local_events(start, end, limit)
         if local:
             sections.append("From assistant's local calendar (events assistant created):\n" + local)
 
-        if sections:
-            return "\n\n".join(sections)
-        window = f" between {start} and {end}" if (start or end) else ""
-        # Name every source that was actually consulted. "Your calendar is clear"
-        # is only honest if the user knows WHICH calendars that covers.
-        return f"No events found{window}. Checked: {', '.join(checked)}."
+        if not sections:
+            window = f" between {start} and {end}" if (start or end) else ""
+            # Only successful reads can establish that a source had no events.
+            sections.append(f"No events found{window}. Checked: {', '.join(checked)}.")
+        if failures:
+            sections.insert(0, "Calendar results are incomplete.\n" + "\n".join(failures))
+        return "\n\n".join(sections)
 
     return Tool(
         name="list_events",

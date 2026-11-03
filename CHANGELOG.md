@@ -4,6 +4,10 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Report Google Calendar read/setup failures as incomplete schedule results,
+  while retaining local events. Separate event rows from source status so
+  event titles cannot be mistaken for empty-calendar or error messages.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.

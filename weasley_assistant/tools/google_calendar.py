@@ -25,6 +25,7 @@ exception, because a calendar hiccup must not take down a chat turn.
 from __future__ import annotations
 
 import datetime as _dt
+from dataclasses import dataclass
 from pathlib import Path
 
 READONLY_SCOPE = "https://www.googleapis.com/auth/calendar.events.readonly"
@@ -126,20 +127,39 @@ def connect(home: Path) -> str:
     return f"Google Calendar connected ({scope}). Token cached at {path}."
 
 
+@dataclass(frozen=True)
+class GoogleCalendarRead:
+    """Keep event rows separate from empty/error messages for source aggregation."""
+
+    events: tuple[str, ...] = ()
+    error: str | None = None
+    empty_message: str = ""
+
+    def text(self) -> str:
+        return self.error if self.error is not None else "\n".join(self.events) or self.empty_message
+
+
 def list_google_events(home: Path, start: str = "", end: str = "", limit: int = 20) -> str:
+    """Plain-text compatibility entry point; structured callers use read_google_events."""
+    return read_google_events(home, start, end, limit).text()
+
+
+def read_google_events(
+    home: Path, start: str = "", end: str = "", limit: int = 20
+) -> GoogleCalendarRead:
     """Events from the user's PRIMARY Google calendar between two dates.
 
     `start`/`end` are YYYY-MM-DD; empty means today. Returns one event per line
-    as `title | start | attendees`, or a sentence saying why it could not.
+    as `title | start | attendees`, with an explicit empty or failure status.
     """
     try:
         from googleapiclient.discovery import build
     except ImportError:
-        return _INSTALL_HINT
+        return GoogleCalendarRead(error=_INSTALL_HINT)
 
     creds = _load_credentials(home, [READONLY_SCOPE, WRITE_SCOPE])
     if creds is None:
-        return _SETUP_HINT
+        return GoogleCalendarRead(error=_SETUP_HINT)
 
     today = _dt.date.today().isoformat()
     s = (start or today)[:10]
@@ -161,18 +181,20 @@ def list_google_events(home: Path, start: str = "", end: str = "", limit: int = 
             maxResults=max(1, min(int(limit or 20), 100)),
         ).execute()
     except Exception as exc:
-        return f"Google Calendar unavailable ({type(exc).__name__}: {str(exc)[:120]})"
+        return GoogleCalendarRead(
+            error=f"Google Calendar unavailable ({type(exc).__name__}: {str(exc)[:120]})"
+        )
 
     items = resp.get("items", [])
     if not items:
-        return f"No Google Calendar events between {s} and {e}."
+        return GoogleCalendarRead(empty_message=f"No Google Calendar events between {s} and {e}.")
     lines = []
     for ev in items:
         when = ev.get("start", {})
         at = when.get("dateTime") or when.get("date") or "?"
         who = ", ".join(a.get("email", "") for a in ev.get("attendees", []) if a.get("email"))
         lines.append(f"{ev.get('summary', '(no title)')} | {at}" + (f" | {who}" if who else ""))
-    return "\n".join(lines)
+    return GoogleCalendarRead(events=tuple(lines))
 
 
 def is_connected(home: Path) -> bool:
