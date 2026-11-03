@@ -4,6 +4,8 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Complete and discard explicit chat transactions in Python 3.12 native autocommit mode, where connection commit/rollback methods are no-ops.
+
 - Roll back failed chat exchanges when SQLite rejects the final commit, including
   reader locks and deferred constraints, without discarding prior caller work.
 

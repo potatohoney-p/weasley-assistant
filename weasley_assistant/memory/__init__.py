@@ -115,7 +115,11 @@ class Memory:
             # savepoint before commit would lose the rollback boundary if a
             # reader lock or deferred constraint rejects that commit.
             if had_transaction:
-                self.conn.commit()
+                # Native autocommit=True requires SQL for explicit transactions.
+                if getattr(self.conn, "autocommit", None) is True:
+                    self.conn.execute("COMMIT")
+                else:
+                    self.conn.commit()
             else:
                 self.conn.execute("RELEASE SAVEPOINT log_chat_exchange")
         except Exception:
@@ -128,7 +132,7 @@ class Memory:
                 else:
                     # RELEASE can retry a blocked commit even after ROLLBACK TO.
                     # We own this whole transaction, so discard it directly.
-                    self.conn.rollback()
+                    self.conn.execute("ROLLBACK")
             raise
 
     # ---- sessions (for the dashboard's chat history + "New chat")
