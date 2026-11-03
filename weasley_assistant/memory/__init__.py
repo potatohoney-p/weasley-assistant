@@ -98,6 +98,7 @@ class Memory:
         encoded_meta = _json.dumps(meta) if meta else None
         # A savepoint keeps the pair atomic even on autocommit connections and
         # preserves unrelated pending writes on ordinary statement failures.
+        had_transaction = self.conn.in_transaction
         self.conn.execute("SAVEPOINT log_chat_exchange")
         try:
             self.conn.execute(
@@ -110,15 +111,29 @@ class Memory:
                 "VALUES ('assistant', ?, ?, ?, ?)",
                 (reply, session_id, source, encoded_meta),
             )
+            # Keep the savepoint until durability succeeds. Releasing a nested
+            # savepoint before commit would lose the rollback boundary if a
+            # reader lock or deferred constraint rejects that commit.
+            if had_transaction:
+                # Native autocommit=True requires SQL for explicit transactions.
+                if getattr(self.conn, "autocommit", None) is True:
+                    self.conn.execute("COMMIT")
+                else:
+                    self.conn.commit()
+            else:
+                self.conn.execute("RELEASE SAVEPOINT log_chat_exchange")
         except Exception:
             # SQLite may already have rolled back the whole transaction (for
             # example, a RAISE(ROLLBACK) trigger). Preserve that original error.
             if self.conn.in_transaction:
-                self.conn.execute("ROLLBACK TO SAVEPOINT log_chat_exchange")
-                self.conn.execute("RELEASE SAVEPOINT log_chat_exchange")
+                if had_transaction:
+                    self.conn.execute("ROLLBACK TO SAVEPOINT log_chat_exchange")
+                    self.conn.execute("RELEASE SAVEPOINT log_chat_exchange")
+                else:
+                    # RELEASE can retry a blocked commit even after ROLLBACK TO.
+                    # We own this whole transaction, so discard it directly.
+                    self.conn.execute("ROLLBACK")
             raise
-        self.conn.execute("RELEASE SAVEPOINT log_chat_exchange")
-        self.conn.commit()
 
     # ---- sessions (for the dashboard's chat history + "New chat")
     def session_history(self, session_id: str) -> list[tuple[str, str]]:
