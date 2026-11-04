@@ -294,6 +294,22 @@ make dashboard            # localhost:7777 → Arena tab
 make eval-judge
 ```
 
+### Disposable trial resources
+
+Each tool-call CLI trial and live Arena contestant owns a fresh temporary home.
+After reading the usage ledger and scoring the result, the runner closes the
+assistant's MCP hook, primary model SDK client and SQLite connection, then removes
+that home, including its local traces, drafts and calendar files. Setup, model,
+scoring and interruption failures also run cleanup. A cleanup failure is surfaced;
+if a trial is already failing, its original exception is preserved.
+
+Saved shootout reports and Arena history remain in the normal assistant home.
+Previously abandoned temporary directories and persistent delegated-code workspaces
+are not removed. This lifecycle does not undo external tool effects or change
+integration settings. Optional remote-memory clients, telemetry exporters and the
+separate quality judge are outside this core-resource cleanup. Process termination
+or filesystem cleanup failures can still leave temporary data behind.
+
 **Reading the scoreboard:** the cumulative table sums Cost / Time / Tokens across
 races and (once built) shows Completion and Quality per model. Sort by any column
 to reorder; the cheapest-that-actually-completed is usually the interesting row,

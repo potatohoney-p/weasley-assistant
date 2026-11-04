@@ -162,6 +162,10 @@ class OpenAICompatClient:
         self._client = openai.OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
         self.messages = SimpleNamespace(create=self._create, stream=self._stream)
 
+    def close(self) -> None:
+        """Release the underlying SDK HTTP client."""
+        self._client.close()
+
     def _to_openai(self, *, model, messages, max_tokens, system=None, tools=None) -> dict:
         oai_messages = []
         if system:

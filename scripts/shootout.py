@@ -25,7 +25,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -34,6 +33,7 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
 from weasley_assistant.config import Settings, load_settings  # noqa: E402  (loads .env keys)
+from weasley_assistant.ops.benchmark_trial import benchmark_trial  # noqa: E402
 from weasley_assistant.ops.pricing import price_for  # noqa: E402
 from weasley_assistant.ops.scoring import check_case, load_cases  # noqa: E402  (the ONE scorer)
 
@@ -60,34 +60,31 @@ def run_one(provider: str, model: str, cases: list[dict], trials: int = 1) -> di
     fail the next (we watched kimi-k3 do exactly that). One trial is a coin
     flip; N trials per case turns the table into a pass RATE. Each trial gets
     a fresh home so no memory leaks between attempts."""
-    from weasley_assistant.app import WeasleyAssistant
-
     rows, t_run, resolved_model = [], time.perf_counter(), model
     for case in cases:
         hits, lat, iters_seen, tin, tout, cost, why = 0, [], [], 0, 0, 0.0, "ok"
         for _ in range(trials):
-            home = Path(tempfile.mkdtemp(prefix=f"shootout-{provider}-"))
             settings = Settings(provider=provider, model=model, small_model="",
-                                home=home, apple_calendar=False)
-            app = WeasleyAssistant(settings=settings)
-            resolved_model = settings.model   # get_client filled the default
-            if "setup_fact" in case:
-                app.memory.facts.add(case["setup_fact"]["subject"], case["setup_fact"]["content"])
-            t0 = time.perf_counter()
-            try:
-                result = app.respond(case["input"])
-                ok, w = check_case(case, result.tool_calls)
-                iters_seen.append(result.iterations)
-            except Exception as exc:  # a crashed turn is a failed trial, not a crashed shootout
-                ok, w = False, f"error: {str(exc)[:90]}"
-            lat.append(time.perf_counter() - t0)
-            i1, o1 = _ledger_totals(home)
-            pin, pout = price_for(provider, model or settings.model)
-            tin, tout = tin + i1, tout + o1
-            cost += i1 / 1e6 * pin + o1 / 1e6 * pout
-            hits += ok
-            if not ok:
-                why = w
+                                apple_calendar=False)
+            with benchmark_trial(settings, prefix=f"shootout-{provider}-") as app:
+                resolved_model = settings.model   # get_client filled the default
+                if "setup_fact" in case:
+                    app.memory.facts.add(case["setup_fact"]["subject"], case["setup_fact"]["content"])
+                t0 = time.perf_counter()
+                try:
+                    result = app.respond(case["input"])
+                    ok, w = check_case(case, result.tool_calls)
+                    iters_seen.append(result.iterations)
+                except Exception as exc:  # a crashed turn is a failed trial, not a crashed shootout
+                    ok, w = False, f"error: {str(exc)[:90]}"
+                lat.append(time.perf_counter() - t0)
+                i1, o1 = _ledger_totals(settings.home)
+                pin, pout = price_for(provider, model or settings.model)
+                tin, tout = tin + i1, tout + o1
+                cost += i1 / 1e6 * pin + o1 / 1e6 * pout
+                hits += ok
+                if not ok:
+                    why = w
         rows.append({"case": case["id"], "hits": hits, "trials": trials,
                      "passed": hits == trials, "why": "ok" if hits == trials else why,
                      "avg_latency_s": round(sum(lat) / len(lat), 1),
