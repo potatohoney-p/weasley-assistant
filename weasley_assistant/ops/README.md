@@ -15,7 +15,8 @@ frontend.
 |---|---|
 | `dashboard.py` | The stdlib HTTP server: routes, SSE, `collect()`. Serves everything below. |
 | `browser_agent.py` | The ONE shared `Weasley Assistant` behind the browser gateway + its dated chat session. |
-| `arena.py` | Racing N models through the same harness, in isolated temp homes. |
+| `arena.py` | Racing N models through the same harness, in separate temp homes. |
+| `benchmark_settings.py` | Local-data settings for Arena and CLI tool-call shootouts. |
 | `catalog.py` | What models a provider can serve + your pinned `provider:model` shortlist. |
 | `pricing.py` | `$/M` rate tables, knowledge cutoffs, and the spend ledger summary. |
 | `settings_api.py` | Reading the live config, and swapping provider/model without a restart. |

@@ -11,8 +11,23 @@ the outcome — not just the receipts.
 > Terminal-Bench, GPQA) — those need their own datasets and official harnesses.
 > Published leaderboard numbers per model live in [§6](#6-published-benchmarks-reference).
 > Our battery is the **local, reproducible mirror**: watch every model do the
-> same real assistant job in an isolated sandbox, then score whether it actually
+> same real assistant job in a temporary home, then score whether it actually
 > got done.
+
+### What the temporary home isolates
+
+CLI tool-call shootouts and Arena contestants use fresh homes with SQLite fact
+and episode stores. They ignore ambient Supabase/Notion memory, Google calendar
+writes, Apple ecosystem tools, GitHub tools, and OTel export settings. A seeded
+benchmark fact therefore stays in its own trial rather than entering your chat
+memory backend. Ordinary chat settings and the process environment are unchanged.
+
+Arena's explicit Apple-calendar and coding options still enable real calendar
+writes and pi delegation respectively. Model calls and `search_web` remain live
+(including the configured search provider), and this is not an OS or network
+sandbox. Provider credentials/endpoints, limits and graph-routing configuration
+still follow normal settings. Reports and the Arena scoreboard still use the
+normal home; this change does not remove trial directories after a run.
 
 ---
 

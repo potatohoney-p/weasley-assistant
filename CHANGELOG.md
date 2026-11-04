@@ -4,6 +4,10 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Keep CLI tool-call shootouts and Arena trials on local SQLite memory, with
+  ambient personal integrations and OTel export disabled. Preserve explicit
+  Arena Apple-calendar/coding options and ordinary chat configuration.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.
