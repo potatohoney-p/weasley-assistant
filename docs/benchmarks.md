@@ -57,7 +57,7 @@ read; the last two are the "did it actually work" that a receipt can't show.
 |------|-----------------|---------------------|-----------------|
 | **Speed** | Wall-clock to finish | `latency_ms` from the loop | free |
 | **Cost** | Dollars for the attempt | tokens × per-model price table | free |
-| **Completion** | *Did it do the job?* | deterministic check of tool calls + sandbox state vs the task's expected outcome | free |
+| **Completion** | *Did it do the job?* | deterministic checks of tool-call receipts against the task's declared expectations | free |
 | **Quality** | *How good was the answer?* | LLM-as-judge (K3 as neutral referee) scores the transcript 0–10 + reason | 1 judge call/column |
 
 The story the arena is built to tell: **plot Cost against Completion/Quality.**
@@ -84,12 +84,23 @@ everywhere:
 | `input` | the user message sent to every model |
 | `expect_tool` | tool that must fire (`null` = must NOT call any tool) |
 | `expect_in_args` | substrings that must appear in that tool's args (case-insensitive) |
-| `expect_min_tool_calls` | floor on total tool calls (multi-step tasks) |
+| `expect_min_tool_calls` | floor on total tool calls (legacy multi-step check) |
+| `expect_tool_counts` | per-tool count bounds, e.g. `{"create_event": {"min": 3, "max": 3}}`; omitted `min` means 0, omitted `max` means no ceiling |
+| `expect_tool_order` | required tool names in first-call order, e.g. `["list_events", "create_event"]`; other calls may appear between them |
 | `setup_fact` | a memory pre-loaded into the sandbox before the run |
 
-Completion score = fraction of a case's expectations met (0.0–1.0). This is the
-deterministic axis: no judge, no vibes — *did the right tool fire with the right
-arguments, and (for multi-step) enough of them.*
+Completion is binary for each attempt: all declared checks pass or the attempt
+fails. A run's pass rate is the fraction of attempts that pass. Tool-specific
+bounds prevent unrelated calls from satisfying a multi-step task; equal `min`
+and `max` require an exact count. First-call ordering rejects scheduling before
+reading the calendar, even if another scheduling call follows a later read.
+The CLI shootout, live dataset eval, and Arena use the same `check_case` scorer.
+
+These checks score receipts, not final sandbox state: repeated or failed tool
+calls still count, and argument checks apply only to the first `expect_tool`
+receipt. They do not prove distinct calendar events, correct durations, success
+of every tool, or the content of other required calls. Historical Arena scores
+are not re-scored; compare new results using the same dataset revision.
 
 **Quality** is separate and additive: the judge (§5) reads the final transcript
 and scores it against a rubric. A model can complete the task (Completion 1.0)
@@ -118,10 +129,10 @@ built to win (its headline is Terminal-Bench / agentic tool use).
 | `schedule-applies-memory` **[seeded]** | (fact: Alex prefers mornings) "Book a catch-up with Alex on Friday" | `create_event`, applies the fact |
 | `remember-preference` **[seeded]** | "Remember that Alex prefers morning meetings" | `save_note`, content~morning |
 | `draft-message` **[seeded]** | "Send Alex a message that the demo moved to Friday" | `send_message`, body~friday |
-| `pokemon-team` **[seeded]** | "…search picks, remember Pikachu is my starter, schedule two training sessions" | ≥3 tool calls: search + save_note + 2× create_event |
+| `pokemon-team` **[seeded]** | "…search picks, remember Pikachu is my starter, schedule two training sessions" | search + save_note + exactly 2× create_event |
 | `worldcup-final` **[seeded]** | "…search the result, remember who won, draft a message to Raj" | ≥3 tool calls, send_message to~raj |
 | `chitchat-no-action` **[seeded]** | "I might grab coffee with Alex sometime, we'll see." | `expect_tool: null` — musing isn't a command; must NOT schedule |
-| `exact-count-sessions` **[seeded]** | "Block three 25-minute focus sessions tomorrow morning" | ≥3 `create_event` — count precision, weak models make one |
+| `exact-count-sessions` **[seeded]** | "Block three 25-minute focus sessions tomorrow morning" | exactly 3 `create_event` receipts — unrelated calls do not count |
 | `remember-and-book` **[seeded]** | "Remember I'm vegetarian, then book dinner with Sam Thursday 7pm" | ≥2 calls: must do BOTH save_note + create_event(sam) |
 | `read-before-write` **[seeded]** | "Check my calendar for a free 30 min this afternoon and schedule a walk" | ≥2 calls: list_events (read state) then create_event |
 

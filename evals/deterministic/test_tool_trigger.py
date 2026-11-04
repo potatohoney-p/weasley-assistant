@@ -19,6 +19,7 @@ from pathlib import Path
 import pytest
 
 from evals.helpers import HAS_KEY, ScriptedClient, make_assistant, response, text_block, tool_block
+from weasley_assistant.ops.scoring import check_case
 
 DATASET = [
     json.loads(line)
@@ -110,18 +111,5 @@ def test_dataset_case(case, tmp_path):
         app.memory.facts.add(case["setup_fact"]["subject"], case["setup_fact"]["content"])
 
     result = app.respond(case["input"])
-    fired = [c["tool"] for c in result.tool_calls]
-
-    if case["expect_tool"] is None:
-        assert fired == [], f"expected no tools, model called {fired}"
-    else:
-        assert case["expect_tool"] in fired, f"expected {case['expect_tool']}, model called {fired}"
-        args = next(c["args"] for c in result.tool_calls if c["tool"] == case["expect_tool"])
-        for key, needle in case.get("expect_in_args", {}).items():
-            assert needle.lower() in str(args.get(key, "")).lower(), (
-                f"expected '{needle}' in args[{key}], got: {args.get(key)}"
-            )
-        # multi-tool cases (pokemon-team, worldcup-final): the loop must have
-        # actually looped, not satisfied one expectation and stopped
-        want = case.get("expect_min_tool_calls", 0)
-        assert len(fired) >= want, f"only {len(fired)} tool calls, wanted >= {want}"
+    passed, why = check_case(case, result.tool_calls)
+    assert passed, why

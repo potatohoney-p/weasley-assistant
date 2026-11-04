@@ -4,6 +4,10 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Score multi-step benchmark cases with per-tool count bounds and first-call
+  ordering, so unrelated calls and late calendar reads cannot produce a pass.
+  Use the same Completion scorer for live dataset evals, CLI shootouts and Arena.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.
