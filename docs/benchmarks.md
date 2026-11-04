@@ -390,6 +390,16 @@ make shootout RUNS="kimi:kimi-k3 anthropic:claude-opus-4-8 gemini:gemini-3.5-fla
 `--trials 3` for stable pass-RATES (tool-calling is nondeterministic); saves a
 markdown + json report to `.weasley/assistant/shootout/` anyone can reproduce with their keys.
 
+Both CLI batteries validate the run plan before starting any contestant.
+`--trials` must be a positive integer, every requested `--cases` ID must exist
+in the selected battery, and every contestant must name a supported provider.
+A mixed valid/unknown selection is rejected rather than silently running a
+smaller benchmark. Case selection keeps dataset order and runs a repeated ID
+only once; an omitted or blank selection still means all cases. Provider-default
+models and opaque model IDs such as `openrouter:vendor/model:free` remain supported.
+This is local plan validation, not a check of credentials, remote model
+availability, or dataset schema. Valid plans can still fail during execution.
+
 ### Gotchas to rehearse around
 - **gpt-5.6-sol** errors every race on purpose (reasoning model, can't tool-call
   on /v1/chat) — leave it in to show the honest error, or drop the chip.

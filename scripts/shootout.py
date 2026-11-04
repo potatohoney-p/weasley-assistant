@@ -40,6 +40,32 @@ from weasley_assistant.ops.scoring import check_case, load_cases  # noqa: E402  
 DATASET = load_cases()
 
 
+def _validate_trials(trials: int) -> None:
+    if type(trials) is not int or trials < 1:
+        raise ValueError("trials must be a positive integer")
+
+
+def _positive_trials(value: str) -> int:
+    try:
+        trials = int(value)
+        _validate_trials(trials)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("trials must be a positive integer") from exc
+    return trials
+
+
+def _select_cases(cases: list[dict], selection: str) -> list[dict]:
+    """Reject a mistyped selection instead of silently running a smaller battery."""
+    wanted = list(dict.fromkeys(c.strip() for c in selection.split(",") if c.strip()))
+    available = [c["id"] for c in cases]
+    unknown = [name for name in wanted if name not in available]
+    if unknown:
+        raise ValueError(f"unknown case ids: {unknown!r} — available ids: {available!r}")
+    if not cases:
+        raise ValueError("the selected battery has no cases")
+    return [c for c in cases if not wanted or c["id"] in wanted]
+
+
 def _ledger_totals(home: Path) -> tuple[int, int]:
     total_in = total_out = 0
     path = home / "usage.jsonl"
@@ -60,6 +86,7 @@ def run_one(provider: str, model: str, cases: list[dict], trials: int = 1) -> di
     fail the next (we watched kimi-k3 do exactly that). One trial is a coin
     flip; N trials per case turns the table into a pass RATE. Each trial gets
     a fresh home so no memory leaks between attempts."""
+    _validate_trials(trials)
     from weasley_assistant.app import WeasleyAssistant
 
     rows, t_run, resolved_model = [], time.perf_counter(), model
@@ -127,6 +154,7 @@ def markdown(results: list[dict]) -> str:
 def coding_shootout(runs: list[str], cases: list[dict], trials: int) -> str:
     """Cross-model CODING round: pi runs each contestant's model on each coding
     task, scored by the task's `verify` command (tests pass = 1). Prints a table."""
+    _validate_trials(trials)
     from weasley_assistant.ops.coding_eval import run_coding_case
 
     lines = ["| brain | pass rate | avg latency | detail |", "|---|---|---|---|"]
@@ -154,23 +182,36 @@ def main() -> None:
                         help="e.g. kimi:kimi-k3 anthropic:claude-opus-4-8 "
                              "(omit :model for the provider default)")
     parser.add_argument("--cases", default="", help="comma-separated case ids (default: all)")
-    parser.add_argument("--trials", type=int, default=3,
-                        help="attempts per case (default 3 — rates, not coin flips)")
+    parser.add_argument("--trials", type=_positive_trials, default=3,
+                        help="positive attempts per case (default 3 — rates, not coin flips)")
     parser.add_argument("--coding", action="store_true",
                         help="run the CODING battery (evals/coding.jsonl) via pi per model, "
                              "scored by each task's verify command")
     args = parser.parse_args()
 
+    # Validate the whole plan before the first contestant can incur model costs.
+    from weasley_assistant.loop.models import PROVIDERS
+
+    providers = PROVIDERS
     if args.coding:
-        from weasley_assistant.ops.coding_eval import load_coding_cases, pi_available
+        from weasley_assistant.ops.coding_eval import PI_PROVIDER, load_coding_cases, pi_available
+        providers = {p: PROVIDERS[p] for p in PI_PROVIDER if p in PROVIDERS}
+        battery = load_coding_cases()
+    else:
+        battery = DATASET
+    try:
+        cases = _select_cases(battery, args.cases)
+        unknown = [spec for spec in args.runs if spec.partition(":")[0] not in providers]
+        if unknown:
+            raise ValueError(f"unknown provider in runs: {unknown!r} — "
+                             f"available providers: {list(providers)!r}")
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    if args.coding:
         if not pi_available():
             raise SystemExit("pi isn't installed — the coding battery needs it. "
                              "Install: npm install -g --ignore-scripts @earendil-works/pi-coding-agent")
-        wanted = [c.strip() for c in args.cases.split(",") if c.strip()]
-        cases = [c for c in load_coding_cases() if not wanted or c["id"] in wanted]
-        if not cases:
-            raise SystemExit(f"no coding cases match {wanted!r} — ids: "
-                             f"{[c['id'] for c in load_coding_cases()]}")
         table = coding_shootout(args.runs, cases, args.trials)
         print("\n" + table)
         out_dir = load_settings().home / "shootout"
@@ -179,11 +220,6 @@ def main() -> None:
         (out_dir / f"coding-{stamp}.md").write_text(table + "\n")
         print(f"\nreport: {out_dir}/coding-{stamp}.md")
         return
-
-    wanted = [c.strip() for c in args.cases.split(",") if c.strip()]
-    cases = [c for c in DATASET if not wanted or c["id"] in wanted]
-    if not cases:
-        raise SystemExit(f"no cases match {wanted!r} — ids: {[c['id'] for c in DATASET]}")
 
     results = []
     for spec in args.runs:
