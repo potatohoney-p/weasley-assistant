@@ -1,16 +1,13 @@
 """Deterministic Completion scoring for the eval battery — the ONE scorer.
 
-Both `scripts/shootout.py` (the CLI table) and the Compare arena (the live
-dashboard scoreboard) score a model's run the same way: did the expected tool
-fire, with the expected args, and did enough of the loop actually run. Keeping
-that judgment here means the terminal number and the on-screen number can never
-drift apart.
+The CLI shootout, Compare arena and live dataset eval score a model's run the
+same way: did the expected tools fire, with the declared args, counts and order?
+Keeping that judgment here prevents their Completion verdicts from drifting.
 
 A "case" is one line of `evals/dataset.jsonl`: an input prompt plus its expected
-outcome (`expect_tool` / `expect_in_args` / `expect_min_tool_calls` /
-`setup_fact`). Completion is the honest, judge-free axis — it's the local mirror
-of a tau-bench / SWE-bench style outcome check (did the end-state match), not a
-vibe. See docs/benchmarks.md.
+outcome (`expect_tool`, argument checks, tool counts/order, and `setup_fact`).
+Completion is the judge-free axis: it checks tool-call receipts, not final
+sandbox state or success of each side effect. See docs/benchmarks.md.
 """
 
 from __future__ import annotations
@@ -30,7 +27,7 @@ def load_cases() -> list[dict]:
 
 
 def check_case(case: dict, tool_calls: list[dict]) -> tuple[bool, str]:
-    """The deterministic contract: right tool, right args, enough calls. Returns
+    """The deterministic contract: right tool, args, counts and first-call order. Returns
     (passed, why) — why is 'ok' on success, else the first failed expectation
     (short enough to show under a race column or speak)."""
     fired = [c["tool"] for c in tool_calls]
@@ -45,6 +42,20 @@ def check_case(case: dict, tool_calls: list[dict]) -> tuple[bool, str]:
     want = case.get("expect_min_tool_calls", 0)
     if len(fired) < want:
         return (False, f"only {len(fired)} tool calls, wanted >= {want}")
+    for tool, bounds in case.get("expect_tool_counts", {}).items():
+        count = fired.count(tool)
+        if count < bounds.get("min", 0):
+            return (False, f"only {count} {tool} calls, wanted >= {bounds['min']}")
+        if "max" in bounds and count > bounds["max"]:
+            return (False, f"{count} {tool} calls, wanted <= {bounds['max']}")
+    order = case.get("expect_tool_order", [])
+    # Compare FIRST occurrences: a write before the read must not be rescued
+    # by a second write afterward. Other tool receipts may appear in between.
+    if any(tool not in fired for tool in order):
+        return (False, f"expected first-call order {' -> '.join(order)}, called {fired}")
+    positions = [fired.index(tool) for tool in order]
+    if positions != sorted(positions):
+        return (False, f"expected first-call order {' -> '.join(order)}, called {fired}")
     return (True, "ok")
 
 
