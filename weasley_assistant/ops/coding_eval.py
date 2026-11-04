@@ -88,7 +88,8 @@ def run_coding_stream(provider: str, model: str, task: str, files: dict | None,
                       verify: str | list[str] | None, on_line,
                       timeout: int = 300) -> tuple:
     """Like run_coding_case, but STREAMS pi's stdout line-by-line to `on_line` as
-    it works — so the arena can show the terminal doing the job live. Returns
+    it works — so the arena can show the terminal doing the job live. The sandbox
+    is removed after verification or failure. Returns
     (passed, why, seconds); `passed` is None when there's no verify (a free-form
     prompt just runs, nothing to score)."""
     pi_bin = shutil.which("pi")
@@ -103,47 +104,55 @@ def run_coding_stream(provider: str, model: str, task: str, files: dict | None,
         prov = PROVIDERS.get(provider)
         return (False, f"no api key ({prov.key_env if prov else provider})", 0.0)
 
-    workdir = Path(tempfile.mkdtemp(prefix=f"code-{provider}-"))
-    for name, content in (files or {}).items():
-        (workdir / name).write_text(content, encoding="utf-8")
-    on_line(f"$ pi --provider {pi_prov} --model {model} -p …")
+    with tempfile.TemporaryDirectory(prefix=f"code-{provider}-") as directory:
+        workdir = Path(directory)
+        for name, content in (files or {}).items():
+            (workdir / name).write_text(content, encoding="utf-8")
+        on_line(f"$ pi --provider {pi_prov} --model {model} -p …")
 
-    t0 = time.perf_counter()
-    try:
-        proc = subprocess.Popen(
-            [pi_bin, "--provider", pi_prov, "--model", model, "--api-key", key,
-             "-p", task, "-a", "--no-session"],
-            cwd=workdir, stdin=subprocess.DEVNULL,   # no TTY under the server: pi
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,  # must not block on stdin
-            text=True, bufsize=1, env=os.environ.copy())
-    except OSError as exc:
-        return (False, f"couldn't launch pi: {exc}", round(time.perf_counter() - t0, 1))
+        t0 = time.perf_counter()
+        try:
+            proc = subprocess.Popen(
+                [pi_bin, "--provider", pi_prov, "--model", model, "--api-key", key,
+                 "-p", task, "-a", "--no-session"],
+                cwd=workdir, stdin=subprocess.DEVNULL,   # no TTY under the server: pi
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,  # must not block on stdin
+                text=True, bufsize=1, env=os.environ.copy())
+        except OSError as exc:
+            return (False, f"couldn't launch pi: {exc}", round(time.perf_counter() - t0, 1))
 
-    killer = threading.Timer(timeout, proc.kill)   # watchdog: kill a hung pi
-    killer.start()
-    try:
-        for line in proc.stdout:                    # blocks per line until pi exits
-            on_line(line.rstrip("\n"))
-        proc.wait()
-    finally:
-        killer.cancel()
-    secs = round(time.perf_counter() - t0, 1)
+        # Close the pipe and reap the direct child even when the stream observer
+        # raises or the caller interrupts. Cancel the watchdog only once cleanup
+        # owns termination, so an interrupted observer cannot leave pi running.
+        with proc:
+            killer = threading.Timer(timeout, proc.kill)
+            try:
+                killer.start()
+                for line in proc.stdout:             # blocks per line until pi exits
+                    on_line(line.rstrip("\n"))
+                proc.wait()
+            finally:
+                killer.cancel()
+                if proc.poll() is None:
+                    proc.kill()
+                proc.wait()
+        secs = round(time.perf_counter() - t0, 1)
 
-    if not verify:
-        on_line("[done — no test to score]")
-        return (None, "ran (no test)", secs)
-    try:
-        v = _run_verify(verify, workdir)
-    except subprocess.TimeoutExpired:
-        on_line("[verify timed out]")
-        return (False, "verify timed out", secs)
-    if v.returncode == 0:
-        on_line("[verify] tests pass")
-        return (True, "tests pass", secs)
-    tail = (v.stdout or v.stderr).strip().splitlines()
-    why = tail[-1][:120] if tail else "tests failed"
-    on_line(f"[verify] FAILED — {why}")
-    return (False, why, secs)
+        if not verify:
+            on_line("[done — no test to score]")
+            return (None, "ran (no test)", secs)
+        try:
+            v = _run_verify(verify, workdir)
+        except subprocess.TimeoutExpired:
+            on_line("[verify timed out]")
+            return (False, "verify timed out", secs)
+        if v.returncode == 0:
+            on_line("[verify] tests pass")
+            return (True, "tests pass", secs)
+        tail = (v.stdout or v.stderr).strip().splitlines()
+        why = tail[-1][:120] if tail else "tests failed"
+        on_line(f"[verify] FAILED — {why}")
+        return (False, why, secs)
 
 
 def _key_for(provider: str) -> str:
@@ -158,7 +167,8 @@ def run_coding_case(provider: str, model: str, case: dict,
 
     The judgment is the exit code of `verify`, run in the sandbox pi worked in —
     so "passed" means the code actually does what was asked, however the model
-    got there. Nothing here trusts pi's prose."""
+    got there. Nothing here trusts pi's prose. The temporary sandbox is removed
+    after verification or any failure."""
     pi_bin = shutil.which("pi")
     if not pi_bin:
         return (False, "pi not installed", 0.0)
@@ -170,34 +180,35 @@ def run_coding_case(provider: str, model: str, case: dict,
         prov = PROVIDERS.get(provider)
         return (False, f"no api key ({prov.key_env if prov else provider})", 0.0)
 
-    workdir = Path(tempfile.mkdtemp(prefix=f"code-{provider}-"))
-    for name, content in (case.get("files") or {}).items():
-        (workdir / name).write_text(content, encoding="utf-8")
+    with tempfile.TemporaryDirectory(prefix=f"code-{provider}-") as directory:
+        workdir = Path(directory)
+        for name, content in (case.get("files") or {}).items():
+            (workdir / name).write_text(content, encoding="utf-8")
 
-    t0 = time.perf_counter()
-    try:
-        # -a trusts project-local files; --no-session keeps the run ephemeral.
-        subprocess.run(
-            [pi_bin, "--provider", pi_prov, "--model", model, "--api-key", key,
-             "-p", case["input"], "-a", "--no-session"],
-            cwd=workdir, stdin=subprocess.DEVNULL, capture_output=True,
-            text=True, timeout=timeout, check=False)
-    except subprocess.TimeoutExpired:
-        return (False, f"pi timed out after {timeout}s", round(time.perf_counter() - t0, 1))
-    except OSError as exc:
-        return (False, f"couldn't launch pi: {exc}", round(time.perf_counter() - t0, 1))
+        t0 = time.perf_counter()
+        try:
+            # -a trusts project-local files; --no-session keeps the run ephemeral.
+            subprocess.run(
+                [pi_bin, "--provider", pi_prov, "--model", model, "--api-key", key,
+                 "-p", case["input"], "-a", "--no-session"],
+                cwd=workdir, stdin=subprocess.DEVNULL, capture_output=True,
+                text=True, timeout=timeout, check=False)
+        except subprocess.TimeoutExpired:
+            return (False, f"pi timed out after {timeout}s", round(time.perf_counter() - t0, 1))
+        except OSError as exc:
+            return (False, f"couldn't launch pi: {exc}", round(time.perf_counter() - t0, 1))
 
-    # We DON'T gate on pi's own exit code — a nonzero exit can still have written
-    # working code. The verify command is the only judge that matters.
-    verify = case.get("verify")
-    if not verify:
-        return (True, "no verify (ran clean)", round(time.perf_counter() - t0, 1))
-    try:
-        v = _run_verify(verify, workdir)
-    except subprocess.TimeoutExpired:
-        return (False, "verify timed out", round(time.perf_counter() - t0, 1))
-    secs = round(time.perf_counter() - t0, 1)
-    if v.returncode == 0:
-        return (True, "tests pass", secs)
-    tail = (v.stdout or v.stderr).strip().splitlines()
-    return (False, (tail[-1][:120] if tail else "tests failed"), secs)
+        # We DON'T gate on pi's own exit code — a nonzero exit can still have written
+        # working code. The verify command is the only judge that matters.
+        verify = case.get("verify")
+        if not verify:
+            return (True, "no verify (ran clean)", round(time.perf_counter() - t0, 1))
+        try:
+            v = _run_verify(verify, workdir)
+        except subprocess.TimeoutExpired:
+            return (False, "verify timed out", round(time.perf_counter() - t0, 1))
+        secs = round(time.perf_counter() - t0, 1)
+        if v.returncode == 0:
+            return (True, "tests pass", secs)
+        tail = (v.stdout or v.stderr).strip().splitlines()
+        return (False, (tail[-1][:120] if tail else "tests failed"), secs)

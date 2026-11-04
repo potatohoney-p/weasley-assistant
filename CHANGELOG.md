@@ -4,6 +4,10 @@ All notable changes to Weasley Assistant are documented here.
 
 ## Unreleased
 
+- Reclaim coding-evaluation temporary sandboxes after verification and failures.
+  Interrupted streaming observers now stop and reap the direct pi child before
+  removing its workspace, instead of leaving background work and files behind.
+
 - Avoid replaying the full tool loop when triage graph execution fails after
   the loop starts. Preserve its original exception or completed result;
   failures before the full turn still fall back normally.
