@@ -56,13 +56,13 @@ async function clearCompareHistory(){
 async function regradeCompare(){
   if (compareState.regrading) return;
   compareState.regrading = true; editing = false; render();
+  const R = compareState.results;
   try {
     const r = await postJSON("/api/compare/regrade",
       {judge_model: compareState.judgeModel || "openai:gpt-5.6-sol", only_missing: false});
     compareState.history = r.runs || []; compareState.aggregate = r.aggregate || [];
-    const last = (r.runs || [])[0];
-    if (last && compareState.results){
-      last.results.forEach(x => { if (compareState.results[x.spec]) compareState.results[x.spec].quality = x.quality; });
+    if (R && compareState.results === R){
+      (r.graded_results || []).forEach(x => { if (R[x.spec]) R[x.spec].quality = x.quality; });
     }
   } catch(e){ compareState.raceError = "re-grade failed: " + e; }
   compareState.regrading = false; editing = false; render();
@@ -77,7 +77,7 @@ async function gradeCard(spec){
     const r = await postJSON("/api/compare/regrade",
       {spec, judge_model: compareState.judgeModel || "openai:gpt-5.6-sol"});
     compareState.history = r.runs || []; compareState.aggregate = r.aggregate || [];
-    const row = ((r.runs || [])[0] || {}).results?.find(x => x.spec === spec);
+    const row = (r.graded_results || []).find(x => x.spec === spec);
     if (row && R[spec]) R[spec].quality = row.quality;
   } catch(e){ compareState.raceError = "grade failed: " + e; }
   if (R[spec]) R[spec]._grading = false;

@@ -24,6 +24,7 @@ race.
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
 from weasley_assistant.config import load_settings
@@ -219,7 +220,8 @@ def compare_regrade(payload: dict) -> dict:
     jp, _, jm = (payload.get("judge_model") or "").partition(":")
     only_missing = payload.get("only_missing", True)
     spec = payload.get("spec")   # grade just ONE card (the per-card button)
-    last = runs[-1]
+    original = runs[-1]
+    last = deepcopy(original)
     for r in last.get("results", []):
         if r.get("error") or not (r.get("reply") or "").strip():
             continue
@@ -231,8 +233,10 @@ def compare_regrade(payload: dict) -> dict:
                                   tools=r.get("tools"))   # history stores tools as [names]
         if q is not None:
             r["quality"] = q
-    compare_history.save_runs(home, runs)
-    return history_response(runs)
+    runs, graded_results = compare_history.merge_grades(home, original, last)
+    # The newest race may have changed while the referee was working. Give the
+    # browser the selected race's cards explicitly, never runs[0] from history.
+    return {**history_response(runs), "graded_results": graded_results}
 
 
 def compare_delete_run(payload: dict) -> dict:
@@ -240,6 +244,5 @@ def compare_delete_run(payload: dict) -> dict:
     the totals — leaving every other race intact. Returns the refreshed history."""
     home = load_settings().home
     ts = payload.get("ts")
-    runs = [r for r in compare_history.load_runs(home) if r.get("ts") != ts]
-    compare_history.save_runs(home, runs)
+    runs = compare_history.delete_run(home, ts)
     return history_response(runs)
