@@ -24,11 +24,11 @@ race.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 from weasley_assistant.config import load_settings
 from weasley_assistant.ops import compare_history, scoring
 from weasley_assistant.ops import judge as judge_mod
+from weasley_assistant.ops.benchmark_trial import benchmark_trial
 from weasley_assistant.ops.pricing import cutoff_for, price_for
 
 
@@ -41,12 +41,10 @@ def compare_stream(message: str, specs: list, emit, judge: bool = False,
     without touching your real data. Parallel threads share one SSE socket, so
     emit() is serialized behind a lock; each event is tagged with its `spec` so
     the browser routes it to the right column."""
-    import tempfile
     import threading
     import time
     from concurrent.futures import ThreadPoolExecutor
 
-    from weasley_assistant.app import WeasleyAssistant
     from weasley_assistant.config import Settings
 
     if not message or not specs:
@@ -70,7 +68,6 @@ def compare_stream(message: str, specs: list, emit, judge: bool = False,
         provider, _, model = spec.partition(":")
         send("start", {"spec": spec, "provider": provider, "model": model,
                        "cutoff": cutoff_for(model)})
-        home = Path(tempfile.mkdtemp(prefix=f"compare-{provider}-"))
         gate: dict = {}
 
         # Stream the STRUCTURAL harness live (gate decision, tool calls) — these
@@ -103,44 +100,44 @@ def compare_stream(message: str, specs: list, emit, judge: bool = False,
                 provider=provider,
                 model=model,
                 small_model="",
-                home=home,
                 apple_calendar=apple,
                 google_calendar=False,
                 experimental=coding,
             )
-            app = WeasleyAssistant(settings=settings)
-            # A scored case may pre-load a fact (e.g. "applies memory") so every
-            # model starts from the same state the checklist assumes.
-            if case and case.get("setup_fact"):
-                app.memory.facts.add(case["setup_fact"]["subject"], case["setup_fact"]["content"])
-            t0 = time.perf_counter()
-            result = app.respond(message, source="compare", observer=obs)
-            ms = int((time.perf_counter() - t0) * 1000)
-            tin = tout = 0
-            ledger = home / "usage.jsonl"
-            if ledger.exists():
-                for line in ledger.read_text(encoding="utf-8").splitlines():
-                    try:
-                        r = json.loads(line)
-                        tin, tout = tin + r.get("in", 0), tout + r.get("out", 0)
-                    except json.JSONDecodeError:
-                        pass
-            pin, pout = price_for(provider, settings.model)
-            cost = round(tin / 1e6 * pin + tout / 1e6 * pout, 4)
-            completion = None
-            if case:
-                passed, why = scoring.check_case(case, result.tool_calls)
-                completion = {"passed": passed, "why": why, "case": case["id"]}
-            # Quality (referee grade) is NOT done here — it runs as one controlled
-            # pass AFTER every column finishes (see below), so the referee doesn't
-            # get a burst of concurrent calls and skip some.
-            send("result", {"spec": spec, "provider": provider, "model": settings.model,
-                            "reply": result.reply, "gate": (gate or None),
-                            "iterations": result.iterations, "latency_ms": ms,
-                            "tools": [{"tool": c["tool"]} for c in result.tool_calls],
-                            "tokens_in": tin, "tokens_out": tout, "cost_usd": cost,
-                            "cutoff": cutoff_for(settings.model),
-                            "completion": completion, "quality": None})
+            with benchmark_trial(settings, prefix=f"compare-{provider}-") as app:
+                # A scored case may pre-load a fact (e.g. "applies memory") so every
+                # model starts from the same state the checklist assumes.
+                if case and case.get("setup_fact"):
+                    app.memory.facts.add(case["setup_fact"]["subject"], case["setup_fact"]["content"])
+                t0 = time.perf_counter()
+                result = app.respond(message, source="compare", observer=obs)
+                ms = int((time.perf_counter() - t0) * 1000)
+                tin = tout = 0
+                ledger = settings.home / "usage.jsonl"
+                if ledger.exists():
+                    for line in ledger.read_text(encoding="utf-8").splitlines():
+                        try:
+                            r = json.loads(line)
+                            tin, tout = tin + r.get("in", 0), tout + r.get("out", 0)
+                        except json.JSONDecodeError:
+                            pass
+                pin, pout = price_for(provider, settings.model)
+                cost = round(tin / 1e6 * pin + tout / 1e6 * pout, 4)
+                completion = None
+                if case:
+                    passed, why = scoring.check_case(case, result.tool_calls)
+                    completion = {"passed": passed, "why": why, "case": case["id"]}
+                # Quality (referee grade) is NOT done here — it runs as one controlled
+                # pass AFTER every column finishes (see below), so the referee doesn't
+                # get a burst of concurrent calls and skip some.
+                payload = {"spec": spec, "provider": provider, "model": settings.model,
+                                "reply": result.reply, "gate": (gate or None),
+                                "iterations": result.iterations, "latency_ms": ms,
+                                "tools": [{"tool": c["tool"]} for c in result.tool_calls],
+                                "tokens_in": tin, "tokens_out": tout, "cost_usd": cost,
+                                "cutoff": cutoff_for(settings.model),
+                                "completion": completion, "quality": None}
+            send("result", payload)
         except (Exception, SystemExit) as exc:
             # SystemExit (not an Exception subclass) is what get_client raises for
             # a missing/misconfigured key. Catch it too, or a keyless provider
