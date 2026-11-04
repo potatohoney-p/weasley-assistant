@@ -33,7 +33,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from weasley_assistant.config import Settings, load_settings  # noqa: E402  (loads .env keys)
+from weasley_assistant.config import load_settings  # noqa: E402  (loads .env keys)
+from weasley_assistant.ops.benchmark_settings import benchmark_settings  # noqa: E402
 from weasley_assistant.ops.pricing import price_for  # noqa: E402
 from weasley_assistant.ops.scoring import check_case, load_cases  # noqa: E402  (the ONE scorer)
 
@@ -67,8 +68,7 @@ def run_one(provider: str, model: str, cases: list[dict], trials: int = 1) -> di
         hits, lat, iters_seen, tin, tout, cost, why = 0, [], [], 0, 0, 0.0, "ok"
         for _ in range(trials):
             home = Path(tempfile.mkdtemp(prefix=f"shootout-{provider}-"))
-            settings = Settings(provider=provider, model=model, small_model="",
-                                home=home, apple_calendar=False)
+            settings = benchmark_settings(provider, model, home)
             app = WeasleyAssistant(settings=settings)
             resolved_model = settings.model   # get_client filled the default
             if "setup_fact" in case:

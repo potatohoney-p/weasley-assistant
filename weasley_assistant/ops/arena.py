@@ -2,9 +2,10 @@
 
 This is the Eval/LLM-Ops pillar made visible. One message goes to N models at
 once; each contestant runs the REAL loop — retrieval gate, tools, memory — in
-its own throwaway home, so a race can create events and save notes without ever
-touching your actual data. That isolation is the whole reason this is safe to
-demo: `~/.weasley/assistant/` is never opened here.
+its own throwaway home with local SQLite memory and ambient personal integrations
+disabled. By default, event and memory writes stay in that home. Explicit Apple
+calendar and coding opt-ins can act outside it; this is not an OS sandbox.
+Model calls and web search remain live, and the scoreboard uses your normal home.
 
     prompt ──┬─→ model A ─→ own temp home ─→ gate · tools · reply ─┐
              ├─→ model B ─→ own temp home ─→ gate · tools · reply ─┼─→ SSE
@@ -29,6 +30,7 @@ from pathlib import Path
 from weasley_assistant.config import load_settings
 from weasley_assistant.ops import compare_history, scoring
 from weasley_assistant.ops import judge as judge_mod
+from weasley_assistant.ops.benchmark_settings import benchmark_settings
 from weasley_assistant.ops.pricing import cutoff_for, price_for
 
 
@@ -37,17 +39,16 @@ def compare_stream(message: str, specs: list, emit, judge: bool = False,
     """Race the models and stream each one's harness LIVE — gate decision and
     tool calls, per model — so every column plays out like the chat dock instead
     of a static 'racing…'. Each contestant runs the REAL loop (tools included) in
-    its own isolated temp home, so it can create events / save notes / search
-    without touching your real data. Parallel threads share one SSE socket, so
-    emit() is serialized behind a lock; each event is tagged with its `spec` so
-    the browser routes it to the right column."""
+    its own temp home with local memory and calendar writes by default. Apple
+    and coding opt-ins can act outside that home; web search remains live.
+    Parallel threads share one SSE socket, so emit() is serialized behind a lock;
+    each event is tagged with its `spec` so the browser routes it to the right column."""
     import tempfile
     import threading
     import time
     from concurrent.futures import ThreadPoolExecutor
 
     from weasley_assistant.app import WeasleyAssistant
-    from weasley_assistant.config import Settings
 
     if not message or not specs:
         emit("done", {"error": "message and models required"})
@@ -99,15 +100,7 @@ def compare_stream(message: str, specs: list, emit, judge: bool = False,
             # (gate, memory, tools), not a bypass. pi runs on this card's model.
             # apple_calendar defaults OFF (isolation), opt-in per race — when on,
             # EACH model writes its own event to the real 'WeasleyAssistant' calendar.
-            settings = Settings(
-                provider=provider,
-                model=model,
-                small_model="",
-                home=home,
-                apple_calendar=apple,
-                google_calendar=False,
-                experimental=coding,
-            )
+            settings = benchmark_settings(provider, model, home, apple=apple, coding=coding)
             app = WeasleyAssistant(settings=settings)
             # A scored case may pre-load a fact (e.g. "applies memory") so every
             # model starts from the same state the checklist assumes.
