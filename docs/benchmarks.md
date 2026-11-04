@@ -100,6 +100,30 @@ we want to see.
 
 ---
 
+### Concurrent scoreboard updates
+
+The dashboard keeps the arena's capped history in `compare/history.jsonl`.
+Within one dashboard process, finished races, deletion and clearing are
+serialized as short file edits. New races have an opaque `id` in addition to
+their display timestamp. Files are published by same-directory replacement,
+so readers see a complete old or new snapshot and failed staging leaves the
+previous history intact.
+
+Regrading calls the provider outside that edit lock. It then applies grades
+only to the original race's unchanged cards: races completed meanwhile remain,
+removed races do not return, and an older in-flight grade cannot overwrite a
+newer saved grade. Each saved grade change gets a revision token, so changing
+back to the same grade does not make an old request current again. The regrade
+response includes `graded_results` for those
+selected cards, separate from the newest-first history. Histories saved before
+IDs were added remain readable; regrading a legacy row requires a unique exact
+match, so changed or ambiguous legacy rows are left untouched.
+
+This is single-process coordination, not a cross-process transaction or a
+power-loss durability guarantee. Running several dashboard processes against
+one home is not supported by this lock. The existing timestamp-based Delete
+selection and the choice to regrade the most recent race are unchanged.
+
 ## 3. Battery sections
 
 The battery is grouped so you can race one section at a time. Cases marked
