@@ -149,6 +149,23 @@ the score):
 | `code-fizzbuzz` **[seeded]** | "Create fizzbuzz.py with fizzbuzz(n)…" | imports it, asserts Fizz/Buzz/FizzBuzz/str(n) |
 | `code-bugfix` **[seeded]** | seeded `calc.py` with a wrong `add()` → "fix it, don't touch check.py" | runs `check.py` |
 
+Coding cases may also set `unchanged_files`, a list of portable relative paths
+already present in `files`. The runner snapshots those seeded bytes before pi
+starts and checks them before and after `verify`. Modified, missing, unreadable
+or non-regular files (including symlink replacements) fail the case. The bundled
+`code-bugfix` protects `check.py`, so replacing its assertions with `pass` cannot
+satisfy the prompt's instruction to leave that file alone. The streaming coding
+runner exposes the same optional keyword argument. Cases without the field keep
+their existing behavior.
+
+This is a check of the files observed at those boundaries, **not an adversarial
+sandbox**: temporary edits restored before checking, background processes,
+Python startup hooks and code that short-circuits the verifier are not contained.
+A passing exit code still depends on the verifier being a sound test. This
+contract covers the direct coding battery and its streaming runner, not the
+Arena's ordinary `delegate_task` flow or historical scores. Compare results
+using the same dataset revision.
+
 Run it:
 ```bash
 make shootout-coding RUNS="kimi:kimi-k3 anthropic:claude-opus-4-8"
